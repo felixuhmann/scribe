@@ -14,15 +14,29 @@ import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import type { DocumentChatUIMessage } from '@/lib/agents/document-chat-agent';
 import { chatTitleFromMessages } from '@/lib/chat-session-title';
+import {
+  buildPlanAnswersUserText,
+  tryParsePlanAnswersUserText,
+  type PlanAnswerPayload,
+} from '@/lib/plan-mode';
 import { buildDocumentChangeSummary } from '@/lib/document-change-summary';
 import { ElectronIpcChatTransport } from '@/lib/electron-ipc-chat-transport';
+import { OPENAI_MODELS } from '@/lib/openai-models';
 import type { DocumentChatBundle, StoredChatSession } from '@/src/scribe-ipc-types';
 
+import {
+  PastClarificationRound,
+  PlanAnswersSubmittedBubble,
+  PlanClarificationForm,
+  type ClarificationQuestion,
+} from '@/components/plan-clarification-form';
 import {
   ArchiveIcon,
   ArchiveRestoreIcon,
   ChevronDownIcon,
+  ListTodoIcon,
   MessageSquarePlusIcon,
+  PenLineIcon,
   SendIcon,
   SquareIcon,
   Trash2Icon,
@@ -41,6 +55,18 @@ function getSetDocumentOutput(
   if (!isObject(out) || !('html' in out)) return null;
   const html = out.html;
   return typeof html === 'string' ? { html } : null;
+}
+
+function getClarificationQuestions(
+  part: DocumentChatUIMessage['parts'][number],
+): ClarificationQuestion[] | null {
+  if (part.type !== 'tool-requestClarifications') return null;
+  if (part.state !== 'output-available') return null;
+  const out = part.output;
+  if (!isObject(out) || !('questions' in out)) return null;
+  const qs = out.questions;
+  if (!Array.isArray(qs)) return null;
+  return qs as ClarificationQuestion[];
 }
 
 function parseInitialMessages(raw: unknown): DocumentChatUIMessage[] {
@@ -97,6 +123,28 @@ function DocumentChatSessionView({
   const { editor } = useEditorSession();
   editorRef.current = editor;
 
+  const [chatMode, setChatMode] = useState<'edit' | 'plan'>('edit');
+  /** `useChat` keeps the first `transport` instance; read mode from a ref so IPC always sees the current dropdown value. */
+  const chatModeRef = useRef(chatMode);
+  chatModeRef.current = chatMode;
+
+  const [chatModel, setChatModel] = useState<string>(OPENAI_MODELS[1].id);
+
+  useEffect(() => {
+    const api = window.scribe?.getSettings;
+    if (!api) return;
+    const sync = () => void api().then((s) => setChatModel(s.model));
+    sync();
+    window.addEventListener('focus', sync);
+    return () => window.removeEventListener('focus', sync);
+  }, []);
+
+  const persistChatModel = useCallback((next: string) => {
+    const api = window.scribe?.setSettings;
+    if (!api) return;
+    void api({ model: next }).then((s) => setChatModel(s.model));
+  }, []);
+
   const getDocumentContext = useCallback(() => {
     const html = editor?.getHTML() ?? '<p></p>';
     const prev = lastSeenRef.current;
@@ -124,6 +172,7 @@ function DocumentChatSessionView({
       new ElectronIpcChatTransport<DocumentChatUIMessage>({
         getDocumentContext,
         onStreamComplete,
+        getChatMode: () => chatModeRef.current,
       }),
     [getDocumentContext, onStreamComplete],
   );
@@ -199,11 +248,27 @@ function DocumentChatSessionView({
   }, [messages, editor]);
 
   const busy = status === 'streaming' || status === 'submitted';
+
+  const awaitingPlanAnswers = useMemo(() => {
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== 'assistant') return false;
+    return last.parts.some(
+      (p) => p.type === 'tool-requestClarifications' && p.state === 'output-available',
+    );
+  }, [messages]);
   const sendPrompt = useCallback(
     (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || busy || !editorReady) return;
+      if (!trimmed || busy || !editorReady || awaitingPlanAnswers) return;
       void sendMessage({ text: trimmed });
+    },
+    [awaitingPlanAnswers, busy, editorReady, sendMessage],
+  );
+
+  const sendPlanAnswers = useCallback(
+    (payload: PlanAnswerPayload) => {
+      if (busy || !editorReady) return;
+      void sendMessage({ text: buildPlanAnswersUserText(payload) });
     },
     [busy, editorReady, sendMessage],
   );
@@ -220,12 +285,13 @@ function DocumentChatSessionView({
           </p>
         ) : messages.length === 0 ? (
           <p className="text-muted-foreground text-xs">
-            Ask about this document or request edits. The assistant can replace the full document when you want
-            changes applied.
+            {chatMode === 'plan'
+              ? 'Describe what you want in the document. Plan mode will ask a few quick questions with suggested answers before applying changes.'
+              : 'Ask about this document or request edits. The assistant can replace the full document when you want changes applied.'}
           </p>
         ) : (
           <ul className="flex flex-col gap-3">
-            {messages.map((m) => (
+            {messages.map((m, msgIdx) => (
               <li key={m.id}>
                 <div
                   className={
@@ -239,6 +305,12 @@ function DocumentChatSessionView({
                   </span>
                   {m.parts.map((part, i) => {
                     if (part.type === 'text') {
+                      if (m.role === 'user') {
+                        const parsed = tryParsePlanAnswersUserText(part.text);
+                        if (parsed) {
+                          return <PlanAnswersSubmittedBubble key={i} payload={parsed} />;
+                        }
+                      }
                       return <ChatTextPart key={i} text={part.text} role={m.role} />;
                     }
                     if (part.type === 'tool-setDocumentHtml') {
@@ -255,6 +327,42 @@ function DocumentChatSessionView({
                           className="flex flex-row items-center gap-2 text-xs opacity-70"
                         >
                           <span>Preparing document edit…</span>
+                          <Spinner className="shrink-0" />
+                        </p>
+                      );
+                    }
+                    if (part.type === 'tool-requestClarifications') {
+                      const qs = getClarificationQuestions(part);
+                      if (qs && part.state === 'output-available') {
+                        const interactive =
+                          m.role === 'assistant' &&
+                          msgIdx === messages.length - 1 &&
+                          !busy;
+                        if (interactive) {
+                          return (
+                            <PlanClarificationForm
+                              key={`${m.id}-clar`}
+                              questions={qs}
+                              disabled={busy || !editorReady}
+                              onSubmitAnswers={sendPlanAnswers}
+                            />
+                          );
+                        }
+                        return <PastClarificationRound key={i} questions={qs} />;
+                      }
+                      if (part.state === 'output-error') {
+                        return (
+                          <p key={i} className="text-destructive text-xs">
+                            Could not load clarification questions.
+                          </p>
+                        );
+                      }
+                      return (
+                        <p
+                          key={i}
+                          className="flex flex-row items-center gap-2 text-xs opacity-70"
+                        >
+                          <span>Preparing clarification questions…</span>
                           <Spinner className="shrink-0" />
                         </p>
                       );
@@ -284,9 +392,13 @@ function DocumentChatSessionView({
           placeholder={
             !editorReady
               ? 'Waiting for the document editor…'
-              : 'Message about this document…'
+              : awaitingPlanAnswers
+                ? 'Use the plan answers above, then the assistant will continue…'
+                : chatMode === 'plan'
+                  ? 'What should we create or change? Plan mode will ask follow-ups first…'
+                  : 'Message about this document…'
           }
-          disabled={!editorReady || busy}
+          disabled={!editorReady || busy || awaitingPlanAnswers}
           className="min-h-[72px] resize-none text-sm"
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -296,17 +408,56 @@ function DocumentChatSessionView({
             }
           }}
         />
-        <div className="flex justify-end gap-2">
-          {busy ? (
-            <Button type="button" variant="outline" size="sm" onClick={() => stop()}>
-              <SquareIcon className="mr-1 size-3.5" aria-hidden />
-              Stop
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-muted-foreground flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1">
+              {chatMode === 'plan' ? (
+                <ListTodoIcon className="size-3.5 shrink-0 opacity-80" aria-hidden />
+              ) : (
+                <PenLineIcon className="size-3.5 shrink-0 opacity-80" aria-hidden />
+              )}
+              <select
+                id="scribe-chat-mode"
+                aria-label="Chat mode"
+                className="border-input bg-background ring-offset-background focus-visible:ring-ring h-8 rounded-md border px-2 text-xs shadow-xs focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                value={chatMode}
+                disabled={busy || awaitingPlanAnswers}
+                onChange={(e) => setChatMode(e.target.value === 'plan' ? 'plan' : 'edit')}
+              >
+                <option value="edit">Edit</option>
+                <option value="plan">Plan</option>
+              </select>
+            </div>
+            <select
+              id="scribe-chat-model"
+              aria-label="OpenAI model"
+              className="border-input bg-background ring-offset-background focus-visible:ring-ring h-8 min-w-0 flex-1 rounded-md border px-2 text-xs shadow-xs focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:max-w-[12rem]"
+              value={chatModel}
+              disabled={busy || !window.scribe?.setSettings}
+              onChange={(e) => persistChatModel(e.target.value)}
+            >
+              {!OPENAI_MODELS.some((m) => m.id === chatModel) ? (
+                <option value={chatModel}>{chatModel}</option>
+              ) : null}
+              {OPENAI_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex shrink-0 justify-end gap-2">
+            {busy ? (
+              <Button type="button" variant="outline" size="sm" onClick={() => stop()}>
+                <SquareIcon className="mr-1 size-3.5" aria-hidden />
+                Stop
+              </Button>
+            ) : null}
+            <Button type="submit" size="sm" disabled={!editorReady || busy || awaitingPlanAnswers}>
+              <SendIcon className="mr-1 size-3.5" aria-hidden />
+              Send
             </Button>
-          ) : null}
-          <Button type="submit" size="sm" disabled={!editorReady || busy}>
-            <SendIcon className="mr-1 size-3.5" aria-hidden />
-            Send
-          </Button>
+          </div>
         </div>
       </form>
     </>

@@ -1,13 +1,40 @@
-import type { UIMessageChunk } from 'ai';
-import { createAgentUIStream } from 'ai';
+import { convertToModelMessages, validateUIMessages, type UIMessageChunk } from 'ai';
 import type { WebContents } from 'electron';
 
-import { createDocumentChatAgent } from '../lib/agents/document-chat-agent';
+import {
+  createDocumentChatAgent,
+  type DocumentChatMode,
+  type DocumentChatUIMessage,
+} from '../lib/agents/document-chat-agent';
+import { documentChatTools } from '../lib/agents/document-chat-tools';
+import { shouldForcePlanClarificationRound } from '../lib/plan-clarification-gate';
 import { readStoredSettings, resolveOpenAiApiKey } from './settings-store';
 
 const DOCUMENT_CHAT_MAX_OUTPUT_TOKENS = 8192;
 
 const abortControllers = new Map<string, AbortController>();
+
+/** `createUIMessageStream` returns `ReadableStream`; `createAgentUIStream` returns async-iterable streams. */
+async function* uiChunksFromStream(
+  stream: AsyncIterable<UIMessageChunk> | ReadableStream<UIMessageChunk>,
+): AsyncGenerator<UIMessageChunk, void, undefined> {
+  if (Symbol.asyncIterator in stream) {
+    for await (const chunk of stream as AsyncIterable<UIMessageChunk>) {
+      yield chunk;
+    }
+    return;
+  }
+  const reader = (stream as ReadableStream<UIMessageChunk>).getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      yield value;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
 
 export async function runDocumentChatSession(options: {
   webContents: WebContents;
@@ -15,8 +42,9 @@ export async function runDocumentChatSession(options: {
   messages: unknown[];
   documentHtml: string;
   documentChangeSummary?: string;
+  chatMode?: DocumentChatMode;
 }): Promise<void> {
-  const { webContents, requestId, messages, documentHtml, documentChangeSummary } = options;
+  const { webContents, requestId, messages, documentHtml, documentChangeSummary, chatMode } = options;
 
   const prev = abortControllers.get(requestId);
   prev?.abort();
@@ -36,25 +64,45 @@ export async function runDocumentChatSession(options: {
     return;
   }
 
-  const agent = createDocumentChatAgent({
-    apiKey,
-    modelId: stored.model,
-    maxOutputTokens: DOCUMENT_CHAT_MAX_OUTPUT_TOKENS,
-  });
+  const mode = chatMode ?? 'edit';
 
   try {
-    const stream = await createAgentUIStream({
-      agent,
-      uiMessages: messages,
-      options: { documentHtml, documentChangeSummary },
+    const agent = createDocumentChatAgent({
+      apiKey,
+      modelId: stored.model,
+      maxOutputTokens: DOCUMENT_CHAT_MAX_OUTPUT_TOKENS,
+      mode,
+    });
+
+    const planForceRequestClarifications =
+      mode === 'plan' && shouldForcePlanClarificationRound(messages, mode);
+
+    // Always validate / convert with the full tool set so sessions that used plan mode
+    // (requestClarifications in history) still validate after switching to edit mode.
+    const validatedMessages = await validateUIMessages<DocumentChatUIMessage>({
+      messages,
+      tools: documentChatTools,
+    });
+
+    const modelMessages = await convertToModelMessages(validatedMessages, {
+      tools: documentChatTools,
+    });
+
+    const stream = await agent.stream({
+      prompt: modelMessages,
+      options: {
+        documentHtml,
+        documentChangeSummary,
+        planForceRequestClarifications,
+      },
       abortSignal: controller.signal,
     });
 
-    for await (const chunk of stream) {
+    for await (const chunk of uiChunksFromStream(stream.toUIMessageStream({ originalMessages: validatedMessages }))) {
       if (controller.signal.aborted) break;
       webContents.send('scribe:documentChat:chunk', {
         id: requestId,
-        chunk: chunk as UIMessageChunk,
+        chunk,
       });
     }
 

@@ -13,13 +13,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 
+import { OPENAI_MODELS } from '@/lib/openai-models';
 import type { ScribeSetSettingsInput, ScribeSettingsPublic } from '@/src/scribe-ipc-types';
-
-const OPENAI_MODELS = [
-  { id: 'gpt-5.4-nano', label: 'GPT-5.4 nano' },
-  { id: 'gpt-5.4-mini', label: 'GPT-5.4 mini' },
-  { id: 'gpt-5.4', label: 'GPT-5.4' },
-] as const;
 
 function keyStatusLine(settings: ScribeSettingsPublic | null): string {
   if (!settings) return '';

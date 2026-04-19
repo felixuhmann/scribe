@@ -45,6 +45,7 @@ declare global {
         messages: unknown[];
         documentHtml: string;
         documentChangeSummary?: string;
+        chatMode?: 'edit' | 'plan';
         onChunk: (chunk: unknown) => void;
         onFinished: (error?: Error) => void;
       }) => () => void;

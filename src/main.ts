@@ -355,7 +355,13 @@ ipcMain.on(
   'scribe:documentChat:start',
   (
     event,
-    payload: { id: string; messages: unknown[]; documentHtml: string; documentChangeSummary?: string },
+    payload: {
+      id: string;
+      messages: unknown[];
+      documentHtml: string;
+      documentChangeSummary?: string;
+      chatMode?: 'edit' | 'plan';
+    },
   ) => {
     void runDocumentChatSession({
       webContents: event.sender,
@@ -363,6 +369,7 @@ ipcMain.on(
       messages: payload.messages,
       documentHtml: payload.documentHtml,
       documentChangeSummary: payload.documentChangeSummary,
+      chatMode: payload.chatMode,
     });
   },
 );

@@ -5,6 +5,8 @@ export type ElectronIpcChatTransportOptions = {
   getDocumentContext: () => { html: string; documentChangeSummary?: string };
   /** After the stream finishes (success or failure). Used to persist “last seen” snapshots. */
   onStreamComplete?: (info: { error?: Error }) => void;
+  /** Controls whether the main-process agent can ask clarification questions (plan) or only edit (edit). */
+  getChatMode?: () => 'edit' | 'plan';
 };
 
 /**
@@ -34,6 +36,7 @@ export class ElectronIpcChatTransport<UI_MESSAGE extends UIMessage>
           messages,
           documentHtml: ctx.html,
           documentChangeSummary: ctx.documentChangeSummary,
+          chatMode: this.opts.getChatMode?.(),
           onChunk: (chunk) => {
             controller.enqueue(chunk as UIMessageChunk);
           },
