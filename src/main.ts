@@ -1,16 +1,24 @@
-import { app, BrowserWindow, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron';
 import { config } from 'dotenv';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
 import { runAutocomplete } from './autocomplete-agent';
-import type { ScribeSetSettingsInput } from './scribe-ipc-types';
+import type {
+  DocumentChatBundle,
+  OpenHtmlDocumentResult,
+  SaveHtmlAsResult,
+  SaveHtmlToPathResult,
+  ScribeSetSettingsInput,
+} from './scribe-ipc-types';
 import {
   applySettingsPatch,
   getPublicSettings,
   readStoredSettings,
   resolveOpenAiApiKey,
 } from './settings-store';
+import { getDocumentChatBundle, saveDocumentChatBundle } from './document-chat-sessions-store';
 import { abortDocumentChatSession, runDocumentChatSession } from './document-chat-ipc';
 
 config({ path: path.resolve(process.cwd(), '.env') });
@@ -32,6 +40,76 @@ ipcMain.handle('scribe:setSettings', async (_event, patch: ScribeSetSettingsInpu
   const next = await applySettingsPatch(current, patch);
   return getPublicSettings(next);
 });
+
+ipcMain.handle('scribe:getDocumentChatBundle', async (_event, documentKey: string) => {
+  return getDocumentChatBundle(documentKey);
+});
+
+ipcMain.handle(
+  'scribe:saveDocumentChatBundle',
+  async (_event, payload: { documentKey: string; bundle: DocumentChatBundle }) => {
+    await saveDocumentChatBundle(payload.documentKey, payload.bundle);
+  },
+);
+
+function wrapHtmlDocument(innerBodyHtml: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Document</title></head><body>${innerBodyHtml}</body></html>`;
+}
+
+ipcMain.handle('scribe:openHtmlDocument', async (event): Promise<OpenHtmlDocumentResult> => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const { canceled, filePaths } = await dialog.showOpenDialog(win ?? undefined, {
+    properties: ['openFile'],
+    filters: [{ name: 'HTML', extensions: ['html', 'htm', 'txt'] }],
+  });
+  if (canceled || !filePaths[0]) {
+    return { ok: false, cancelled: true };
+  }
+  const filePath = path.resolve(filePaths[0]);
+  try {
+    const html = await fs.readFile(filePath, 'utf8');
+    const name = path.basename(filePath);
+    return { ok: true, path: filePath, name, html };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Could not read file';
+    return { ok: false, error: message };
+  }
+});
+
+ipcMain.handle(
+  'scribe:saveHtmlToPath',
+  async (_event, payload: { path: string; htmlBody: string }): Promise<SaveHtmlToPathResult> => {
+    try {
+      await fs.writeFile(payload.path, wrapHtmlDocument(payload.htmlBody), 'utf8');
+      return { ok: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Save failed';
+      return { ok: false, error: message };
+    }
+  },
+);
+
+ipcMain.handle(
+  'scribe:saveHtmlAs',
+  async (event, payload: { htmlBody: string; defaultPath?: string }): Promise<SaveHtmlAsResult> => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const { canceled, filePath } = await dialog.showSaveDialog(win ?? undefined, {
+      defaultPath: payload.defaultPath,
+      filters: [{ name: 'HTML', extensions: ['html', 'htm'] }],
+    });
+    if (canceled || !filePath) {
+      return { ok: false, cancelled: true };
+    }
+    const outPath = path.resolve(filePath);
+    try {
+      await fs.writeFile(outPath, wrapHtmlDocument(payload.htmlBody), 'utf8');
+      return { ok: true, path: outPath };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Save failed';
+      return { ok: false, error: message };
+    }
+  },
+);
 
 ipcMain.on(
   'scribe:documentChat:start',

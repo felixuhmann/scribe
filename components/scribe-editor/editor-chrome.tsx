@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 
+import { useDocumentWorkspace } from '@/components/document-workspace-context';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-
 import { LinkDialog } from './link-dialog';
 import { EditorFormattingToolbar } from './editor-formatting-toolbar';
 import { EditorMenubar } from './editor-menubar';
@@ -17,6 +17,17 @@ export function ScribeEditorChrome({ onAiSettingsSaved }: ScribeEditorChromeProp
   const chrome = useEditorChromeState();
   const { mod, wordCount, ...toolChrome } = chrome;
   const { editor } = toolChrome;
+  const {
+    documentKey,
+    diskAbsolutePath,
+    isDirty,
+    syncDocumentBaseline,
+    noteEditorHtmlChanged,
+    notifyOpenedLocalFile,
+    notifyOpenedFromDisk,
+    notifyNewBlankDocument,
+    adoptSavedFilePath,
+  } = useDocumentWorkspace();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [linkOpen, setLinkOpen] = useState(false);
@@ -24,20 +35,45 @@ export function ScribeEditorChrome({ onAiSettingsSaved }: ScribeEditorChromeProp
 
   const openFilePicker = () => fileInputRef.current?.click();
 
+  const openDocument = useCallback(async () => {
+    const api = window.scribe?.openHtmlDocument;
+    if (api) {
+      const result = await api();
+      if (!result.ok) return;
+      notifyOpenedFromDisk(result.path);
+      editor.chain().focus().setContent(result.html, { emitUpdate: true }).run();
+      return;
+    }
+    openFilePicker();
+  }, [editor, notifyOpenedFromDisk]);
+
   const onFileChosen = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
     void file.text().then((html) => {
+      notifyOpenedLocalFile(file);
       editor.chain().focus().setContent(html, { emitUpdate: true }).run();
     });
   };
 
-  const saveAsHtml = () => {
-    const html = editor.getHTML();
+  const saveAsHtml = useCallback(async () => {
+    const htmlBody = editor.getHTML();
+    const api = window.scribe?.saveHtmlAs;
+    if (api) {
+      const result = await api({
+        htmlBody,
+        defaultPath: diskAbsolutePath ?? undefined,
+      });
+      if (result.ok) {
+        adoptSavedFilePath(result.path);
+        syncDocumentBaseline(htmlBody);
+      }
+      return;
+    }
     const blob = new Blob(
       [
-        `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Document</title></head><body>${html}</body></html>`,
+        `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Document</title></head><body>${htmlBody}</body></html>`,
       ],
       { type: 'text/html;charset=utf-8' },
     );
@@ -46,11 +82,52 @@ export function ScribeEditorChrome({ onAiSettingsSaved }: ScribeEditorChromeProp
     a.download = 'document.html';
     a.click();
     URL.revokeObjectURL(a.href);
-  };
+  }, [adoptSavedFilePath, diskAbsolutePath, editor, syncDocumentBaseline]);
+
+  const saveDocument = useCallback(async () => {
+    const htmlBody = editor.getHTML();
+    const toPath = window.scribe?.saveHtmlToPath;
+    const asDialog = window.scribe?.saveHtmlAs;
+    if (diskAbsolutePath && toPath) {
+      const result = await toPath(diskAbsolutePath, htmlBody);
+      if (result.ok) {
+        syncDocumentBaseline(htmlBody);
+      }
+      return;
+    }
+    if (asDialog) {
+      const result = await asDialog({
+        htmlBody,
+        defaultPath: diskAbsolutePath ?? undefined,
+      });
+      if (result.ok) {
+        adoptSavedFilePath(result.path);
+        syncDocumentBaseline(htmlBody);
+      }
+    } else {
+      await saveAsHtml();
+    }
+  }, [adoptSavedFilePath, diskAbsolutePath, editor, saveAsHtml, syncDocumentBaseline]);
 
   const newDocument = () => {
+    notifyNewBlankDocument();
     editor.chain().focus().setContent('<p></p>', { emitUpdate: true }).run();
   };
+
+  /** Whenever the logical document changes, treat the current editor HTML as the saved baseline. */
+  useEffect(() => {
+    syncDocumentBaseline(editor.getHTML());
+  }, [documentKey, editor, syncDocumentBaseline]);
+
+  useEffect(() => {
+    const onUpdate = () => {
+      noteEditorHtmlChanged(editor.getHTML());
+    };
+    editor.on('update', onUpdate);
+    return () => {
+      editor.off('update', onUpdate);
+    };
+  }, [editor, noteEditorHtmlChanged]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -62,10 +139,18 @@ export function ScribeEditorChrome({ onAiSettingsSaved }: ScribeEditorChromeProp
         e.preventDefault();
         setSettingsOpen(true);
       }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          void saveAsHtml();
+        } else {
+          void saveDocument();
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [saveAsHtml, saveDocument]);
 
   return (
     <>
@@ -96,13 +181,20 @@ export function ScribeEditorChrome({ onAiSettingsSaved }: ScribeEditorChromeProp
               canRedo={toolChrome.canRedo}
               textAlign={toolChrome.textAlign}
               onNewDocument={newDocument}
-              onOpenFile={openFilePicker}
-              onSaveHtml={saveAsHtml}
+              onOpenFile={openDocument}
+              onSaveDocument={() => void saveDocument()}
+              onSaveHtmlAs={() => void saveAsHtml()}
               onOpenLink={() => setLinkOpen(true)}
               onOpenSettings={() => setSettingsOpen(true)}
             />
             <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
               {wordCount} {wordCount === 1 ? 'word' : 'words'}
+              <span className="text-muted-foreground/80 mx-1.5">·</span>
+              {isDirty ? (
+                <span className="text-amber-700 dark:text-amber-400">Unsaved</span>
+              ) : (
+                <span>Saved</span>
+              )}
             </span>
           </div>
         </div>

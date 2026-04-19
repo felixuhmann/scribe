@@ -5,14 +5,13 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
 } from '@/components/ui/sidebar';
 import { DocumentChatPanel } from '@/components/document-chat-panel';
 
 export function AppSidebar() {
   return (
     <Sidebar collapsible="offcanvas">
-      <SidebarHeader>
+      <SidebarHeader className="border-sidebar-border shrink-0 border-b px-3 py-3">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" type="button">
@@ -30,7 +29,6 @@ export function AppSidebar() {
       <SidebarContent className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden">
         <DocumentChatPanel />
       </SidebarContent>
-      <SidebarRail />
     </Sidebar>
   );
 }

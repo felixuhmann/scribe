@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 import type {
+  DocumentChatBundle,
+  OpenHtmlDocumentResult,
+  SaveHtmlAsResult,
+  SaveHtmlToPathResult,
   ScribeAutocompleteResult,
   ScribeSetSettingsInput,
   ScribeSettingsPublic,
@@ -12,6 +16,15 @@ contextBridge.exposeInMainWorld('scribe', {
   getSettings: (): Promise<ScribeSettingsPublic> => ipcRenderer.invoke('scribe:getSettings'),
   setSettings: (patch: ScribeSetSettingsInput): Promise<ScribeSettingsPublic> =>
     ipcRenderer.invoke('scribe:setSettings', patch),
+  getDocumentChatBundle: (documentKey: string): Promise<DocumentChatBundle> =>
+    ipcRenderer.invoke('scribe:getDocumentChatBundle', documentKey),
+  saveDocumentChatBundle: (documentKey: string, bundle: DocumentChatBundle): Promise<void> =>
+    ipcRenderer.invoke('scribe:saveDocumentChatBundle', { documentKey, bundle }),
+  openHtmlDocument: (): Promise<OpenHtmlDocumentResult> => ipcRenderer.invoke('scribe:openHtmlDocument'),
+  saveHtmlToPath: (filePath: string, htmlBody: string): Promise<SaveHtmlToPathResult> =>
+    ipcRenderer.invoke('scribe:saveHtmlToPath', { path: filePath, htmlBody }),
+  saveHtmlAs: (input: { htmlBody: string; defaultPath?: string }): Promise<SaveHtmlAsResult> =>
+    ipcRenderer.invoke('scribe:saveHtmlAs', input),
   documentChatStream: (params: {
     messages: unknown[];
     documentHtml: string;

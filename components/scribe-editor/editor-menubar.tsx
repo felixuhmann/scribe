@@ -25,7 +25,8 @@ export type EditorMenubarProps = {
   textAlign: AlignValue;
   onNewDocument: () => void;
   onOpenFile: () => void;
-  onSaveHtml: () => void;
+  onSaveDocument: () => void;
+  onSaveHtmlAs: () => void;
   onOpenLink: () => void;
   onOpenSettings: () => void;
 };
@@ -38,7 +39,8 @@ export function EditorMenubar({
   textAlign,
   onNewDocument,
   onOpenFile,
-  onSaveHtml,
+  onSaveDocument,
+  onSaveHtmlAs,
   onOpenLink,
   onOpenSettings,
 }: EditorMenubarProps) {
@@ -65,9 +67,13 @@ export function EditorMenubar({
             Open…
             <MenubarShortcut>{mod}O</MenubarShortcut>
           </MenubarItem>
-          <MenubarItem onSelect={onSaveHtml}>
-            Save as…
+          <MenubarItem onSelect={onSaveDocument}>
+            Save
             <MenubarShortcut>{mod}S</MenubarShortcut>
+          </MenubarItem>
+          <MenubarItem onSelect={onSaveHtmlAs}>
+            Save as…
+            <MenubarShortcut>⇧{mod}S</MenubarShortcut>
           </MenubarItem>
           <MenubarSeparator />
           <MenubarItem onSelect={() => window.print()}>
