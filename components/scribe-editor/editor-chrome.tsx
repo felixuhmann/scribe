@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 
+import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 
 import { LinkDialog } from './link-dialog';
@@ -84,23 +85,26 @@ export function ScribeEditorChrome({ onAiSettingsSaved }: ScribeEditorChromeProp
         className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-50 flex shrink-0 flex-col border-b border-border backdrop-blur-sm"
         role="banner"
       >
-        <div className="flex flex-wrap items-center gap-1.5 px-1.5 py-1">
+        <div className="flex h-16 shrink-0 items-center gap-2 px-3">
           <SidebarTrigger />
-          <EditorMenubar
-            editor={editor}
-            mod={mod}
-            canUndo={toolChrome.canUndo}
-            canRedo={toolChrome.canRedo}
-            textAlign={toolChrome.textAlign}
-            onNewDocument={newDocument}
-            onOpenFile={openFilePicker}
-            onSaveHtml={saveAsHtml}
-            onOpenLink={() => setLinkOpen(true)}
-            onOpenSettings={() => setSettingsOpen(true)}
-          />
-          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-            {wordCount} {wordCount === 1 ? 'word' : 'words'}
-          </span>
+          <Separator orientation="vertical" className="mr-2 h-4" />
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+            <EditorMenubar
+              editor={editor}
+              mod={mod}
+              canUndo={toolChrome.canUndo}
+              canRedo={toolChrome.canRedo}
+              textAlign={toolChrome.textAlign}
+              onNewDocument={newDocument}
+              onOpenFile={openFilePicker}
+              onSaveHtml={saveAsHtml}
+              onOpenLink={() => setLinkOpen(true)}
+              onOpenSettings={() => setSettingsOpen(true)}
+            />
+            <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+              {wordCount} {wordCount === 1 ? 'word' : 'words'}
+            </span>
+          </div>
         </div>
 
         <EditorFormattingToolbar

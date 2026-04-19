@@ -2,6 +2,7 @@ import type { Editor } from '@tiptap/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Tiptap, useEditor } from '@tiptap/react';
 
+import { useEditorSession } from '@/components/editor-session-context';
 import { TabAutocomplete } from '@/lib/tiptap-tab-autocomplete-extension';
 
 import { AUTOCOMPLETE_DEBOUNCE_MS, DEFAULT_DOC, EDITOR_EXTENSIONS } from './constants';
@@ -29,6 +30,13 @@ export function ScribeEditor() {
 }
 
 function ScribeEditorInner({ editor }: { editor: Editor }) {
+  const { setEditor } = useEditorSession();
+
+  useEffect(() => {
+    setEditor(editor);
+    return () => setEditor(null);
+  }, [editor, setEditor]);
+
   const [tabAutocomplete, setTabAutocomplete] = useState({
     enabled: true,
     debounceMs: AUTOCOMPLETE_DEBOUNCE_MS,

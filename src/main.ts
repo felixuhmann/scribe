@@ -11,6 +11,7 @@ import {
   readStoredSettings,
   resolveOpenAiApiKey,
 } from './settings-store';
+import { abortDocumentChatSession, runDocumentChatSession } from './document-chat-ipc';
 
 config({ path: path.resolve(process.cwd(), '.env') });
 
@@ -30,6 +31,22 @@ ipcMain.handle('scribe:setSettings', async (_event, patch: ScribeSetSettingsInpu
   const current = await readStoredSettings();
   const next = await applySettingsPatch(current, patch);
   return getPublicSettings(next);
+});
+
+ipcMain.on(
+  'scribe:documentChat:start',
+  (event, payload: { id: string; messages: unknown[]; documentHtml: string }) => {
+    void runDocumentChatSession({
+      webContents: event.sender,
+      requestId: payload.id,
+      messages: payload.messages,
+      documentHtml: payload.documentHtml,
+    });
+  },
+);
+
+ipcMain.on('scribe:documentChat:abort', (_event, payload: { id: string }) => {
+  abortDocumentChatSession(payload.id);
 });
 
 ipcMain.handle(

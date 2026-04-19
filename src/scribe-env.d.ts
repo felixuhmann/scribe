@@ -8,6 +8,12 @@ declare global {
       autocompleteSuggest: (input: { before: string; after: string }) => Promise<ScribeAutocompleteResult>;
       getSettings: () => Promise<ScribeSettingsPublic>;
       setSettings: (patch: ScribeSetSettingsInput) => Promise<ScribeSettingsPublic>;
+      documentChatStream: (params: {
+        messages: unknown[];
+        documentHtml: string;
+        onChunk: (chunk: unknown) => void;
+        onFinished: (error?: Error) => void;
+      }) => () => void;
     };
   }
 }
