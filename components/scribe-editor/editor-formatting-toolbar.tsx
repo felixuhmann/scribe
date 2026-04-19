@@ -144,7 +144,7 @@ export function EditorFormattingToolbar({
   onOpenLink,
 }: EditorFormattingToolbarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-2 border-t border-border px-3 py-2">
+    <div className="flex flex-wrap items-center gap-1.5 border-t border-border px-2 py-1.5">
       <div className="flex items-center gap-0.5">
         <Button
           type="button"

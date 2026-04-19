@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 
+import { SidebarTrigger } from '@/components/ui/sidebar';
+
 import { LinkDialog } from './link-dialog';
 import { EditorFormattingToolbar } from './editor-formatting-toolbar';
 import { EditorMenubar } from './editor-menubar';
@@ -82,7 +84,8 @@ export function ScribeEditorChrome({ onAiSettingsSaved }: ScribeEditorChromeProp
         className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-50 flex shrink-0 flex-col border-b border-border backdrop-blur-sm"
         role="banner"
       >
-        <div className="flex flex-wrap items-center gap-2 px-2 py-1.5">
+        <div className="flex flex-wrap items-center gap-1.5 px-1.5 py-1">
+          <SidebarTrigger />
           <EditorMenubar
             editor={editor}
             mod={mod}
