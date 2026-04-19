@@ -42,6 +42,10 @@ export type StoredChatSession = {
   title: string;
   messages: unknown[];
   updatedAt: number;
+  /** When true, hidden from the main list until restored. */
+  archived?: boolean;
+  /** Editor HTML after the last completed assistant turn — used to diff user edits before the next message. */
+  lastAgentDocumentHtml?: string;
 };
 
 export type DocumentChatBundle = {

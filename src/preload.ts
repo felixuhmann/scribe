@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('scribe', {
   documentChatStream: (params: {
     messages: unknown[];
     documentHtml: string;
+    documentChangeSummary?: string;
     onChunk: (chunk: unknown) => void;
     onFinished: (error?: Error) => void;
   }): (() => void) => {
@@ -64,6 +65,7 @@ contextBridge.exposeInMainWorld('scribe', {
       id,
       messages: params.messages,
       documentHtml: params.documentHtml,
+      documentChangeSummary: params.documentChangeSummary,
     });
 
     return () => {

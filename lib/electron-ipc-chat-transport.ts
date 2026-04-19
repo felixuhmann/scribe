@@ -1,8 +1,10 @@
 import type { ChatTransport, UIMessage, UIMessageChunk } from 'ai';
 
 export type ElectronIpcChatTransportOptions = {
-  /** Latest editor HTML passed to the agent each request */
-  getDocumentHtml: () => string;
+  /** Full HTML plus optional diff vs last completed turn for this session */
+  getDocumentContext: () => { html: string; documentChangeSummary?: string };
+  /** After the stream finishes (success or failure). Used to persist “last seen” snapshots. */
+  onStreamComplete?: (info: { error?: Error }) => void;
 };
 
 /**
@@ -27,9 +29,11 @@ export class ElectronIpcChatTransport<UI_MESSAGE extends UIMessage>
     return new ReadableStream<UIMessageChunk>({
       start: (controller) => {
         let finished = false;
+        const ctx = this.opts.getDocumentContext();
         const teardown = api({
           messages,
-          documentHtml: this.opts.getDocumentHtml(),
+          documentHtml: ctx.html,
+          documentChangeSummary: ctx.documentChangeSummary,
           onChunk: (chunk) => {
             controller.enqueue(chunk as UIMessageChunk);
           },
@@ -38,6 +42,7 @@ export class ElectronIpcChatTransport<UI_MESSAGE extends UIMessage>
             finished = true;
             if (err) controller.error(err);
             else controller.close();
+            this.opts.onStreamComplete?.({ error: err });
           },
         });
 

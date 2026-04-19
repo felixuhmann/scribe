@@ -24,6 +24,7 @@ declare global {
       documentChatStream: (params: {
         messages: unknown[];
         documentHtml: string;
+        documentChangeSummary?: string;
         onChunk: (chunk: unknown) => void;
         onFinished: (error?: Error) => void;
       }) => () => void;

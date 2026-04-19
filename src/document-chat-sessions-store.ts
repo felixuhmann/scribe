@@ -41,7 +41,17 @@ function normalizeBundle(raw: unknown): DocumentChatBundle {
       typeof r.title === 'string' && r.title.trim() !== '' ? r.title.trim() : 'New chat';
     const messages = Array.isArray(r.messages) ? r.messages : [];
     const updatedAt = typeof r.updatedAt === 'number' && Number.isFinite(r.updatedAt) ? r.updatedAt : Date.now() - i;
-    return { id, title, messages, updatedAt };
+    const lastAgentDocumentHtml =
+      typeof r.lastAgentDocumentHtml === 'string' ? r.lastAgentDocumentHtml : undefined;
+    const archived = r.archived === true;
+    return {
+      id,
+      title,
+      messages,
+      updatedAt,
+      ...(archived ? { archived: true } : {}),
+      ...(lastAgentDocumentHtml !== undefined ? { lastAgentDocumentHtml } : {}),
+    };
   });
   let activeSessionId =
     typeof o.activeSessionId === 'string' && o.activeSessionId.trim() !== ''

@@ -15,12 +15,11 @@ export type ScribeEditorChromeProps = {
 
 export function ScribeEditorChrome({ onAiSettingsSaved }: ScribeEditorChromeProps) {
   const chrome = useEditorChromeState();
-  const { mod, wordCount, ...toolChrome } = chrome;
+  const { mod, ...toolChrome } = chrome;
   const { editor } = toolChrome;
   const {
     documentKey,
     diskAbsolutePath,
-    isDirty,
     syncDocumentBaseline,
     noteEditorHtmlChanged,
     notifyOpenedLocalFile,
@@ -187,15 +186,6 @@ export function ScribeEditorChrome({ onAiSettingsSaved }: ScribeEditorChromeProp
               onOpenLink={() => setLinkOpen(true)}
               onOpenSettings={() => setSettingsOpen(true)}
             />
-            <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-              {wordCount} {wordCount === 1 ? 'word' : 'words'}
-              <span className="text-muted-foreground/80 mx-1.5">·</span>
-              {isDirty ? (
-                <span className="text-amber-700 dark:text-amber-400">Unsaved</span>
-              ) : (
-                <span>Saved</span>
-              )}
-            </span>
           </div>
         </div>
 

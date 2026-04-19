@@ -14,8 +14,9 @@ export async function runDocumentChatSession(options: {
   requestId: string;
   messages: unknown[];
   documentHtml: string;
+  documentChangeSummary?: string;
 }): Promise<void> {
-  const { webContents, requestId, messages, documentHtml } = options;
+  const { webContents, requestId, messages, documentHtml, documentChangeSummary } = options;
 
   const prev = abortControllers.get(requestId);
   prev?.abort();
@@ -45,7 +46,7 @@ export async function runDocumentChatSession(options: {
     const stream = await createAgentUIStream({
       agent,
       uiMessages: messages,
-      options: { documentHtml },
+      options: { documentHtml, documentChangeSummary },
       abortSignal: controller.signal,
     });
 
@@ -57,9 +58,8 @@ export async function runDocumentChatSession(options: {
       });
     }
 
-    if (!controller.signal.aborted) {
-      webContents.send('scribe:documentChat:end', { id: requestId });
-    }
+    // Include abort `break` above: the renderer must always get `end` to close the stream.
+    webContents.send('scribe:documentChat:end', { id: requestId });
   } catch (err) {
     if (controller.signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
       webContents.send('scribe:documentChat:end', { id: requestId });

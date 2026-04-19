@@ -1,16 +1,32 @@
 import { useChat } from '@ai-sdk/react';
+import DOMPurify from 'dompurify';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useDocumentWorkspace } from '@/components/document-workspace-context';
 import { useEditorSession } from '@/components/editor-session-context';
 import { Button } from '@/components/ui/button';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import type { DocumentChatUIMessage } from '@/lib/agents/document-chat-agent';
 import { chatTitleFromMessages } from '@/lib/chat-session-title';
+import { buildDocumentChangeSummary } from '@/lib/document-change-summary';
 import { ElectronIpcChatTransport } from '@/lib/electron-ipc-chat-transport';
 import type { DocumentChatBundle, StoredChatSession } from '@/src/scribe-ipc-types';
 
-import { MessageSquarePlusIcon, SendIcon, SquareIcon } from 'lucide-react';
+import {
+  ArchiveIcon,
+  ArchiveRestoreIcon,
+  ChevronDownIcon,
+  MessageSquarePlusIcon,
+  SendIcon,
+  SquareIcon,
+  Trash2Icon,
+} from 'lucide-react';
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object';
@@ -32,32 +48,79 @@ function parseInitialMessages(raw: unknown): DocumentChatUIMessage[] {
   return raw as DocumentChatUIMessage[];
 }
 
+/** Rich text from the model; user bubbles stay plain text for safety. */
+const assistantMessageHtmlClassName =
+  'break-words text-sm [&_a]:text-primary [&_a]:underline [&_code]:rounded-md [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_pre]:my-2 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-2 [&_pre]:text-xs [&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:my-0.5 [&_h1]:mb-2 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:mb-2 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_blockquote]:border-muted-foreground/50 [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_blockquote]:italic';
+
+function ChatTextPart({ text, role }: { text: string; role: DocumentChatUIMessage['role'] }) {
+  if (role === 'user') {
+    return <p className="break-words whitespace-pre-wrap">{text}</p>;
+  }
+  const safe = DOMPurify.sanitize(text, { USE_PROFILES: { html: true } });
+  return (
+    <div
+      className={assistantMessageHtmlClassName}
+      dangerouslySetInnerHTML={{ __html: safe }}
+    />
+  );
+}
+
 type DocumentChatSessionViewProps = {
   sessionId: string;
   documentKey: string;
   initialMessages: DocumentChatUIMessage[];
-  getDocumentHtml: () => string;
+  initialLastAgentDocumentHtml?: string;
   editorReady: boolean;
   onPersistSession: (sessionId: string, messages: DocumentChatUIMessage[]) => void;
+  onPersistAgentSnapshot: (sessionId: string, html: string) => void;
 };
 
 function DocumentChatSessionView({
   sessionId,
   documentKey,
   initialMessages,
-  getDocumentHtml,
+  initialLastAgentDocumentHtml,
   editorReady,
   onPersistSession,
+  onPersistAgentSnapshot,
 }: DocumentChatSessionViewProps) {
   const appliedToolIds = useRef(new Set<string>());
+  /** After first editor+messages sync: do not replay persisted tool HTML into the editor (would clobber current doc). */
+  const toolReplayHydratedRef = useRef(false);
+  const lastSeenRef = useRef<string | null>(initialLastAgentDocumentHtml ?? null);
+  const editorRef = useRef<ReturnType<typeof useEditorSession>['editor']>(null);
   const { editor } = useEditorSession();
+  editorRef.current = editor;
+
+  const getDocumentContext = useCallback(() => {
+    const html = editor?.getHTML() ?? '<p></p>';
+    const prev = lastSeenRef.current;
+    const documentChangeSummary =
+      prev !== null && prev !== html ? buildDocumentChangeSummary(prev, html) : undefined;
+    return { html, documentChangeSummary };
+  }, [editor]);
+
+  const onStreamComplete = useCallback(
+    (info: { error?: Error }) => {
+      if (info.error) return;
+      queueMicrotask(() => {
+        const ed = editorRef.current;
+        if (!ed) return;
+        const snapshot = ed.getHTML();
+        lastSeenRef.current = snapshot;
+        onPersistAgentSnapshot(sessionId, snapshot);
+      });
+    },
+    [sessionId, onPersistAgentSnapshot],
+  );
 
   const transport = useMemo(
     () =>
       new ElectronIpcChatTransport<DocumentChatUIMessage>({
-        getDocumentHtml,
+        getDocumentContext,
+        onStreamComplete,
       }),
-    [getDocumentHtml],
+    [getDocumentContext, onStreamComplete],
   );
 
   const { messages, sendMessage, status, stop, error } = useChat<DocumentChatUIMessage>({
@@ -85,6 +148,20 @@ function DocumentChatSessionView({
 
   useEffect(() => {
     if (!editor) return;
+
+    if (!toolReplayHydratedRef.current) {
+      for (const message of messages) {
+        if (message.role !== 'assistant') continue;
+        for (const part of message.parts) {
+          const payload = getSetDocumentOutput(part);
+          if (!payload?.html) continue;
+          const id = 'toolCallId' in part && typeof part.toolCallId === 'string' ? part.toolCallId : '';
+          if (id) appliedToolIds.current.add(id);
+        }
+      }
+      toolReplayHydratedRef.current = true;
+      return;
+    }
 
     for (const message of messages) {
       if (message.role !== 'assistant') continue;
@@ -140,11 +217,7 @@ function DocumentChatSessionView({
                   </span>
                   {m.parts.map((part, i) => {
                     if (part.type === 'text') {
-                      return (
-                        <p key={i} className="break-words whitespace-pre-wrap">
-                          {part.text}
-                        </p>
-                      );
+                      return <ChatTextPart key={i} text={part.text} role={m.role} />;
                     }
                     if (part.type === 'tool-setDocumentHtml') {
                       if (part.state === 'output-available') {
@@ -155,8 +228,12 @@ function DocumentChatSessionView({
                         );
                       }
                       return (
-                        <p key={i} className="text-xs opacity-70">
-                          Preparing document edit…
+                        <p
+                          key={i}
+                          className="flex flex-row items-center gap-2 text-xs opacity-70"
+                        >
+                          <span>Preparing document edit…</span>
+                          <Spinner className="shrink-0" />
                         </p>
                       );
                     }
@@ -221,6 +298,7 @@ export function DocumentChatPanel() {
   const [bundle, setBundle] = useState<DocumentChatBundle | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [archivedChatsOpen, setArchivedChatsOpen] = useState(false);
   /**
    * useChat must receive the correct `messages` on the first paint after a document/session switch.
    * A ref snapshot updates synchronously when `${documentKey}::${activeSessionId}` changes, but not
@@ -293,6 +371,21 @@ export function DocumentChatPanel() {
     [saveBundle],
   );
 
+  const persistAgentSnapshot = useCallback(
+    (sessionId: string, html: string) => {
+      setBundle((prev) => {
+        if (!prev) return prev;
+        const sessions = prev.sessions.map((s) =>
+          s.id === sessionId ? { ...s, lastAgentDocumentHtml: html } : s,
+        );
+        const next: DocumentChatBundle = { ...prev, sessions };
+        saveBundle(next);
+        return next;
+      });
+    },
+    [saveBundle],
+  );
+
   const selectSession = useCallback(
     (id: string) => {
       setActiveSessionId(id);
@@ -327,8 +420,85 @@ export function DocumentChatPanel() {
     setActiveSessionId(id);
   }, [saveBundle]);
 
-  const getDocumentHtml = useCallback(() => editor?.getHTML() ?? '<p></p>', [editor]);
+  const deleteActiveSession = useCallback(() => {
+    if (!bundle || !activeSessionId) return;
+    const remaining = bundle.sessions.filter((s) => s.id !== activeSessionId);
+    if (remaining.length === 0) {
+      const id = crypto.randomUUID();
+      const now = Date.now();
+      const session: StoredChatSession = {
+        id,
+        title: 'New chat',
+        messages: [],
+        updatedAt: now,
+      };
+      const next: DocumentChatBundle = { activeSessionId: id, sessions: [session] };
+      saveBundle(next);
+      setBundle(next);
+      setActiveSessionId(id);
+      return;
+    }
+    const nextActive =
+      remaining.find((s) => !s.archived)?.id ?? remaining[0].id;
+    const next: DocumentChatBundle = {
+      activeSessionId: nextActive,
+      sessions: remaining,
+    };
+    saveBundle(next);
+    setBundle(next);
+    setActiveSessionId(nextActive);
+  }, [bundle, activeSessionId, saveBundle]);
+
+  const archiveActiveSession = useCallback(() => {
+    if (!bundle || !activeSessionId) return;
+    let sessions = bundle.sessions.map((s) =>
+      s.id === activeSessionId ? { ...s, archived: true as const } : s,
+    );
+    const available = sessions.filter((s) => !s.archived);
+    let newActiveId: string;
+    if (available.length === 0) {
+      newActiveId = crypto.randomUUID();
+      const now = Date.now();
+      sessions = [
+        ...sessions,
+        { id: newActiveId, title: 'New chat', messages: [], updatedAt: now },
+      ];
+    } else {
+      newActiveId = available[0].id;
+    }
+    const next: DocumentChatBundle = { activeSessionId: newActiveId, sessions };
+    saveBundle(next);
+    setBundle(next);
+    setActiveSessionId(newActiveId);
+  }, [bundle, activeSessionId, saveBundle]);
+
+  const unarchiveActiveSession = useCallback(() => {
+    if (!bundle || !activeSessionId) return;
+    const sessions = bundle.sessions.map((s) => {
+      if (s.id !== activeSessionId) return s;
+      if (!s.archived) return s;
+      const { archived: _a, ...rest } = s;
+      void _a;
+      return rest;
+    });
+    const next: DocumentChatBundle = { ...bundle, sessions };
+    saveBundle(next);
+    setBundle(next);
+  }, [bundle, activeSessionId, saveBundle]);
+
   const editorReady = Boolean(editor);
+
+  const activeSessionMeta =
+    bundle && activeSessionId
+      ? bundle.sessions.find((s) => s.id === activeSessionId)
+      : undefined;
+  const activeSessionArchived = activeSessionMeta?.archived === true;
+
+  useEffect(() => {
+    if (activeSessionArchived) {
+      setArchivedChatsOpen(true);
+    }
+  }, [activeSessionArchived]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-row gap-3 px-1">
@@ -345,27 +515,79 @@ export function DocumentChatPanel() {
         </Button>
         <div className="text-sidebar-foreground/60 min-h-0 flex-1 overflow-y-auto text-[10px] leading-snug">
           {bundle ? (
-            <ul className="flex flex-col gap-0.5">
-              {bundle.sessions.map((s) => {
-                const selected = s.id === activeSessionId;
-                return (
-                  <li key={s.id}>
-                    <button
+            <>
+              <ul className="flex flex-col gap-0.5">
+                {bundle.sessions
+                  .filter((s) => !s.archived)
+                  .map((s) => {
+                    const selected = s.id === activeSessionId;
+                    return (
+                      <li key={s.id}>
+                        <button
+                          type="button"
+                          onClick={() => selectSession(s.id)}
+                          className={
+                            selected
+                              ? 'bg-sidebar-accent text-sidebar-accent-foreground w-full rounded-md px-1.5 py-1 text-left text-[11px] font-medium'
+                              : 'hover:bg-muted/80 text-sidebar-foreground/90 w-full rounded-md px-1.5 py-1 text-left text-[11px]'
+                          }
+                          title={s.title}
+                        >
+                          <span className="line-clamp-2">{s.title}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+              </ul>
+              {bundle.sessions.some((s) => s.archived) ? (
+                <Collapsible
+                  open={archivedChatsOpen}
+                  onOpenChange={setArchivedChatsOpen}
+                  className="border-sidebar-border/60 group/collapsible mt-2 border-t pt-2"
+                >
+                  <CollapsibleTrigger asChild>
+                    <Button
                       type="button"
-                      onClick={() => selectSession(s.id)}
-                      className={
-                        selected
-                          ? 'bg-sidebar-accent text-sidebar-accent-foreground w-full rounded-md px-1.5 py-1 text-left text-[11px] font-medium'
-                          : 'hover:bg-muted/80 text-sidebar-foreground/90 w-full rounded-md px-1.5 py-1 text-left text-[11px]'
-                      }
-                      title={s.title}
+                      variant="ghost"
+                      size="sm"
+                      className="text-sidebar-foreground/70 hover:text-sidebar-foreground h-7 w-full justify-start px-1.5 text-[9px] font-medium uppercase"
                     >
-                      <span className="line-clamp-2">{s.title}</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+                      <ChevronDownIcon
+                        data-icon="inline-start"
+                        className="transition-transform group-data-[state=open]/collapsible:rotate-180"
+                        aria-hidden
+                      />
+                      Archived
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <ul className="flex flex-col gap-0.5 pt-0.5">
+                      {bundle.sessions
+                        .filter((s) => s.archived)
+                        .map((s) => {
+                          const selected = s.id === activeSessionId;
+                          return (
+                            <li key={s.id}>
+                              <button
+                                type="button"
+                                onClick={() => selectSession(s.id)}
+                                className={
+                                  selected
+                                    ? 'bg-sidebar-accent/80 text-sidebar-accent-foreground w-full rounded-md px-1.5 py-1 text-left text-[11px] font-medium'
+                                    : 'hover:bg-muted/60 text-sidebar-foreground/70 w-full rounded-md px-1.5 py-1 text-left text-[11px]'
+                                }
+                                title={s.title}
+                              >
+                                <span className="line-clamp-2">{s.title}</span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  </CollapsibleContent>
+                </Collapsible>
+              ) : null}
+            </>
           ) : (
             <p className="text-muted-foreground px-0.5">…</p>
           )}
@@ -373,11 +595,55 @@ export function DocumentChatPanel() {
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
-        <div className="px-0.5">
-          <div className="text-sidebar-foreground/80 text-xs font-medium tracking-wide uppercase">Assistant</div>
-          <p className="text-sidebar-foreground/55 mt-0.5 truncate text-[10px]" title={documentKey}>
-            {documentLabel}
-          </p>
+        <div className="flex items-start gap-2 px-0.5">
+          <div className="min-w-0 flex-1">
+            <div className="text-sidebar-foreground/80 text-xs font-medium tracking-wide uppercase">
+              Assistant
+            </div>
+            <p className="text-sidebar-foreground/55 mt-0.5 truncate text-[10px]" title={documentKey}>
+              {documentLabel}
+            </p>
+          </div>
+          {bundle && activeSessionId ? (
+            <div className="flex shrink-0 gap-0.5 pt-0.5">
+              {activeSessionArchived ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-sidebar-foreground/70 hover:text-sidebar-foreground size-7"
+                  title="Restore chat to main list"
+                  aria-label="Restore archived chat"
+                  onClick={unarchiveActiveSession}
+                >
+                  <ArchiveRestoreIcon className="size-3.5" aria-hidden />
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-sidebar-foreground/70 hover:text-sidebar-foreground size-7"
+                  title="Archive this chat"
+                  aria-label="Archive chat"
+                  onClick={archiveActiveSession}
+                >
+                  <ArchiveIcon className="size-3.5" aria-hidden />
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="text-sidebar-foreground/70 hover:text-destructive size-7"
+                title="Delete this chat"
+                aria-label="Delete chat"
+                onClick={deleteActiveSession}
+              >
+                <Trash2Icon className="size-3.5" aria-hidden />
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         {loadError ? (
@@ -390,9 +656,12 @@ export function DocumentChatPanel() {
             sessionId={activeSessionId}
             documentKey={documentKey}
             initialMessages={initialMessagesForView}
-            getDocumentHtml={getDocumentHtml}
+            initialLastAgentDocumentHtml={
+              bundle.sessions.find((s) => s.id === activeSessionId)?.lastAgentDocumentHtml
+            }
             editorReady={editorReady}
             onPersistSession={persistSession}
+            onPersistAgentSnapshot={persistAgentSnapshot}
           />
         ) : (
           <p className="text-muted-foreground text-xs">Loading chats…</p>

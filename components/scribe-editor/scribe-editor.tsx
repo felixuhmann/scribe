@@ -7,6 +7,7 @@ import { TabAutocomplete } from '@/lib/tiptap-tab-autocomplete-extension';
 
 import { AUTOCOMPLETE_DEBOUNCE_MS, DEFAULT_DOC, EDITOR_EXTENSIONS } from './constants';
 import { ScribeEditorChrome } from './editor-chrome';
+import { ScribeEditorFooter } from './editor-footer';
 import { EditorSelectionMenus } from './editor-selection-menus';
 import { useEditorTabAutocomplete } from './use-editor-tab-autocomplete';
 
@@ -41,6 +42,7 @@ function ScribeEditorInner({ editor }: { editor: Editor }) {
     enabled: true,
     debounceMs: AUTOCOMPLETE_DEBOUNCE_MS,
   });
+  const [tabAutocompleteTogglePending, setTabAutocompleteTogglePending] = useState(false);
 
   const refreshTabAutocompleteSettings = useCallback(() => {
     const api = window.scribe?.getSettings;
@@ -53,6 +55,26 @@ function ScribeEditorInner({ editor }: { editor: Editor }) {
   useEffect(() => {
     refreshTabAutocompleteSettings();
   }, [refreshTabAutocompleteSettings]);
+
+  const toggleTabAutocomplete = useCallback(async () => {
+    const next = !tabAutocomplete.enabled;
+    const api = window.scribe?.setSettings;
+    if (!api) {
+      setTabAutocomplete((prev) => ({ ...prev, enabled: next }));
+      return;
+    }
+    setTabAutocompleteTogglePending(true);
+    try {
+      const s = await api({ autocompleteEnabled: next });
+      setTabAutocomplete((prev) => ({
+        ...prev,
+        enabled: s.autocompleteEnabled,
+        debounceMs: s.autocompleteDebounceMs,
+      }));
+    } finally {
+      setTabAutocompleteTogglePending(false);
+    }
+  }, [tabAutocomplete.enabled]);
 
   useEditorTabAutocomplete(editor, tabAutocomplete);
 
@@ -70,6 +92,11 @@ function ScribeEditorInner({ editor }: { editor: Editor }) {
               <Tiptap.Content className="scribe-editor-content focus-within:outline-none" />
             </div>
           </div>
+          <ScribeEditorFooter
+            autocompleteEnabled={tabAutocomplete.enabled}
+            onToggleTabAutocomplete={() => void toggleTabAutocomplete()}
+            togglePending={tabAutocompleteTogglePending}
+          />
           <EditorSelectionMenus editor={editor} />
         </div>
       </Tiptap>

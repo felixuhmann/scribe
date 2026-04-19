@@ -113,12 +113,16 @@ ipcMain.handle(
 
 ipcMain.on(
   'scribe:documentChat:start',
-  (event, payload: { id: string; messages: unknown[]; documentHtml: string }) => {
+  (
+    event,
+    payload: { id: string; messages: unknown[]; documentHtml: string; documentChangeSummary?: string },
+  ) => {
     void runDocumentChatSession({
       webContents: event.sender,
       requestId: payload.id,
       messages: payload.messages,
       documentHtml: payload.documentHtml,
+      documentChangeSummary: payload.documentChangeSummary,
     });
   },
 );

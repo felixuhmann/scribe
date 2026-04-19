@@ -11,6 +11,8 @@ import { documentChatTools } from './document-chat-tools';
 export type DocumentChatCallOptions = {
   /** Latest TipTap HTML snapshot — injected each turn via prepareCall */
   documentHtml: string;
+  /** Optional unified diff vs last snapshot this session saw (user edits, other tabs, etc.) */
+  documentChangeSummary?: string;
 };
 
 /** Model reference used only for typing message/tool unions */
@@ -29,7 +31,7 @@ function openAiModelSupportsTemperature(modelId: string): boolean {
   return true;
 }
 
-const BASE_INSTRUCTIONS = `You are Scribe's document assistant. You see the user's chat messages plus the CURRENT_DOCUMENT_HTML block that mirrors what is in their editor right now.
+const BASE_INSTRUCTIONS = `You are Scribe's document assistant. You see the user's chat messages plus the CURRENT_DOCUMENT_HTML block that mirrors what is in their editor right now. If DOCUMENT_CHANGE_SINCE_LAST_TURN is present, it summarizes edits since your last completed turn in this thread; always treat CURRENT_DOCUMENT_HTML as the single source of truth.
 
 Goals:
 - Answer questions about the document (tone, structure, clarity).
@@ -63,9 +65,14 @@ export function createDocumentChatAgent(options: {
       const base =
         typeof args.instructions === 'string' ? args.instructions : BASE_INSTRUCTIONS;
       const doc = args.options?.documentHtml ?? '';
+      const delta = args.options?.documentChangeSummary?.trim();
+      const deltaBlock =
+        delta && delta.length > 0
+          ? `\n\nDOCUMENT_CHANGE_SINCE_LAST_TURN (unified diff; CURRENT_DOCUMENT_HTML is authoritative):\n"""${delta}"""`
+          : '';
       return {
         ...args,
-        instructions: `${base}\n\nCURRENT_DOCUMENT_HTML:\n"""${doc}"""`,
+        instructions: `${base}\n\nCURRENT_DOCUMENT_HTML:\n"""${doc}"""${deltaBlock}`,
       };
     },
   });
