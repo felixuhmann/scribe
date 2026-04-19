@@ -1,16 +1,31 @@
 # Scribe
 
-Scribe is a **desktop writing app** built with [Electron](https://www.electronjs.org/). It gives you a focused editor for Markdown and HTML documents on disk: open files from your filesystem, edit with a rich [Tiptap](https://tiptap.dev/) surface, export or save back as Markdown or HTML, and optionally use **AI-assisted** features powered by the [Vercel AI SDK](https://sdk.vercel.ai/) and OpenAI-compatible APIs.
+Scribe is an **AI-first desktop writing app** built with [Electron](https://www.electronjs.org/). You work on real **Markdown and HTML files** on disk, but the product is designed around **writing with models**: inline continuation as you type, and a **document-aware chat** that helps you draft, revise, and think alongside your file.
 
-The UI is built with **React 19**, **TypeScript**, **Tailwind CSS**, and [shadcn/ui](https://ui.shadcn.com/) patterns.
+The editor is a rich [Tiptap](https://tiptap.dev/) surface. AI is wired through the [Vercel AI SDK](https://sdk.vercel.ai/) and OpenAI-compatible APIs. The UI uses **React 19**, **TypeScript**, **Tailwind CSS**, and [shadcn/ui](https://ui.shadcn.com/) patterns.
 
 ---
 
-## Features (high level)
+## How AI shows up today
 
-- **Local-first documents** — open, edit, and save files on your machine (with native dialogs where available).
-- **Markdown ↔ editor** — Markdown is converted for editing and can be written back with reasonable fidelity.
-- **Optional AI** — document chat and related flows when an API key is configured (see [Configuration](#configuration)).
+### Tab-complete writing flow
+
+While you type, Scribe can show a **ghost continuation** after the cursor: a short AI suggestion inferred from the text before and after your position. When a suggestion appears, press **Tab** to **insert** it; suggestions clear when you move the selection or the document changes in incompatible ways. Autocomplete runs in the main process (with abort/cancel on new keystrokes) and can be tuned in **Settings** (model, temperature, token budget, on/off).
+
+Relevant code paths: `components/scribe-editor/use-editor-tab-autocomplete.ts`, `lib/tiptap-tab-autocomplete-extension.ts`, `src/autocomplete-agent.ts`, and the `scribe:autocomplete` IPC handler in `src/main.ts`.
+
+### Document chat
+
+A **sidebar chat** is tied to the document you have open. It streams assistant turns over Electron IPC, keeps **per-document chat sessions** on disk, and is meant for higher-level help: outlining sections, rewriting paragraphs, answering questions about the draft, and similar workflows—always with your current file as context.
+
+Relevant areas: `components/document-chat-panel.tsx`, `lib/electron-ipc-chat-transport.ts`, `src/document-chat-ipc.ts`, and `src/document-chat-sessions-store.ts`.
+
+---
+
+## Everything else (foundation)
+
+- **Local-first files** — open, edit, and save on your machine (native dialogs where available).
+- **Markdown ↔ editor** — Markdown is converted for editing and can be saved back with reasonable fidelity.
 - **Cross-platform packaging** — Electron Forge targets Windows (Squirrel), macOS (ZIP), and Linux (deb/rpm).
 
 ---
@@ -32,11 +47,11 @@ cd scribe
 npm ci
 ```
 
-### Configuration
+### Configuration (expected for the full experience)
 
-For AI features, Scribe needs an OpenAI API key. You can either:
+Configure an **OpenAI API key** so autocomplete and document chat work as intended:
 
-1. Create a `.env` file in the project root with:
+1. Create a `.env` file in the project root:
 
    ```bash
    OPENAI_API_KEY=sk-...
@@ -44,7 +59,7 @@ For AI features, Scribe needs an OpenAI API key. You can either:
 
 2. Or set the key in the in-app **Settings** dialog (stored locally by the app).
 
-Without a key, the editor and file workflows still work; AI actions will prompt you to configure a key.
+You can still open and edit files without a key; **AI entry points will tell you to add a key** when needed.
 
 ### Run in development
 
@@ -66,23 +81,37 @@ This runs ESLint and `tsc --noEmit`.
 
 Individual scripts:
 
-| Script            | Description                                      |
-| ----------------- | ------------------------------------------------ |
-| `npm run lint`    | ESLint over `.ts` / `.tsx`                       |
-| `npm run typecheck` | TypeScript compile without emitting output    |
-| `npm run package` | Package the app for the current platform        |
-| `npm run make`    | Generate distributables (installers/archives)    |
+| Script              | Description                                   |
+| ------------------- | --------------------------------------------- |
+| `npm run lint`      | ESLint over `.ts` / `.tsx`                    |
+| `npm run typecheck` | TypeScript compile without emitting output  |
+| `npm run package`   | Package the app for the current platform    |
+| `npm run make`      | Generate distributables (installers/archives) |
+
+---
+
+## Roadmap and future efforts
+
+These are the **main product priorities**—good places for collaborators to jump in or discuss in an issue before a large change.
+
+| Priority | Direction |
+| -------- | --------- |
+| **1. Selection → suggest change** | Let the user **select a span** (for example a section or paragraph) and trigger **inline edit or transform**: propose a replacement or patch in context, with a clear accept/reject or diff-style flow—so targeted rewrites do not require the full chat panel. |
+| **2. Plan mode for document chat** | A **planning phase** before heavy generation: the assistant asks **clarifying questions** (tone, audience, structure, constraints) and **resolves ambiguities** in the user’s goal so the following answers land closer to what they wanted with less iteration. |
+| **3. Document history (mass-market friendly)** | **Version history** that feels obvious to non-developers: timelines, named snapshots, or “restore this version”—possibly backed by **Git** or another store, but **hidden complexity** where possible so writers get safety nets without learning Git. |
+
+If you want to work on one of these, open an issue with a short sketch of UX and technical approach, or comment on an existing thread, so we can avoid duplicate effort.
 
 ---
 
 ## Project layout (orientation)
 
-| Area | Role |
-| ---- | ---- |
-| `src/` | Electron **main** process, preload, IPC handlers, settings, AI session plumbing |
-| `components/` | React UI (editor chrome, sidebar, shell, shadcn-style primitives) |
-| `lib/` | Shared utilities (Markdown I/O, IPC helpers, etc.) |
-| `.github/workflows/` | CI (lint + typecheck on push/PR) |
+| Area                   | Role                                                                 |
+| ---------------------- | -------------------------------------------------------------------- |
+| `src/`                 | Electron **main** process, preload, IPC, settings, AI session plumbing |
+| `components/`          | React UI (editor, sidebar, chat, shell, shadcn-style primitives)       |
+| `lib/`                 | Shared utilities (Markdown I/O, IPC helpers, agents, etc.)           |
+| `.github/workflows/`   | CI (lint + typecheck on push/PR)                                     |
 
 If you use Cursor, optional agent guidance for this repo lives under `.agents/skills/` (Tiptap, shadcn, AI SDK). It is **not** required to build or run Scribe.
 
@@ -92,7 +121,7 @@ If you use Cursor, optional agent guidance for this repo lives under `.agents/sk
 
 Contributions are welcome. This project is intended to stay **approachable for newcomers** and **respectful of maintainers’ time**. A few guidelines:
 
-1. **Open an issue first** for larger changes (new features, refactors that touch many files, or behavior you are unsure about). That helps align on direction before you invest in a big patch.
+1. **Open an issue first** for larger changes (new features, refactors that touch many files, or behavior you are unsure about). That helps align on direction before you invest in a big patch—especially for [roadmap](#roadmap-and-future-efforts) items.
 2. **Keep pull requests focused** — one logical change per PR is easier to review and merge.
 3. **Run `npm run check`** and fix any lint or type errors before submitting.
 4. **Describe what and why** in the PR body so reviewers can follow your intent without guessing.
