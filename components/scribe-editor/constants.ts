@@ -4,7 +4,6 @@ import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import TextAlign from '@tiptap/extension-text-align';
 import Underline from '@tiptap/extension-underline';
-// eslint-disable-next-line import/no-named-as-default -- StarterKit default export
 import StarterKit from '@tiptap/starter-kit';
 /* eslint-enable import/no-named-as-default */
 

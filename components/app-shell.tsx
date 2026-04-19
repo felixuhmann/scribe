@@ -92,6 +92,8 @@ function DesktopSplit({
         onPointerDown={onPointerDownHandle}
         ref={handleRef}
         role="separator"
+        // Focusable when visible so keyboard users can reach the resize control (see aria-label).
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- WAI-ARIA allows focusable separators
         tabIndex={open ? 0 : -1}
       >
         <span

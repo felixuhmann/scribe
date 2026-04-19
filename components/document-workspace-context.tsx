@@ -26,6 +26,30 @@ export function absolutePathFromDocumentKey(documentKey: string): string | null 
   }
 }
 
+function inferFormatFromFilename(nameOrPath: string): 'html' | 'markdown' {
+  const lower = nameOrPath.toLowerCase();
+  if (lower.endsWith('.md') || lower.endsWith('.markdown')) {
+    return 'markdown';
+  }
+  return 'html';
+}
+
+/**
+ * How the current document should be written when saving to disk (when no “Save as” format is chosen).
+ * Derived from the backing filename for `file:` and `local:` keys.
+ */
+export function inferContentFormatFromDocumentKey(documentKey: string): 'html' | 'markdown' | null {
+  const filePath = absolutePathFromDocumentKey(documentKey);
+  if (filePath) {
+    return inferFormatFromFilename(filePath);
+  }
+  if (documentKey.startsWith('local:')) {
+    const name = documentKey.slice('local:'.length).split(':')[0];
+    return inferFormatFromFilename(name);
+  }
+  return null;
+}
+
 function readStoredDocumentKey(): string {
   try {
     const v = sessionStorage.getItem(STORAGE_KEY);

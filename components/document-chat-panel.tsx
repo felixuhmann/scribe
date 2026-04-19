@@ -340,7 +340,7 @@ export function DocumentChatPanel() {
 
   const hydrationKey =
     bundle && activeSessionId ? `${documentKey}::${activeSessionId}` : '';
-  if (hydrationKey && hydrationKey !== chatInitialMessagesRef.current.key) {
+  if (bundle && hydrationKey && hydrationKey !== chatInitialMessagesRef.current.key) {
     const s = bundle.sessions.find((x) => x.id === activeSessionId);
     chatInitialMessagesRef.current = {
       key: hydrationKey,

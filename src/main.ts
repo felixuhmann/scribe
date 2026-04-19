@@ -7,9 +7,12 @@ import started from 'electron-squirrel-startup';
 import { runAutocomplete } from './autocomplete-agent';
 import type {
   DocumentChatBundle,
-  OpenHtmlDocumentResult,
+  ExportPdfResult,
+  OpenDocumentResult,
   SaveHtmlAsResult,
   SaveHtmlToPathResult,
+  SaveMarkdownAsResult,
+  SaveMarkdownToPathResult,
   ScribeSetSettingsInput,
 } from './scribe-ipc-types';
 import {
@@ -56,20 +59,68 @@ function wrapHtmlDocument(innerBodyHtml: string): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Document</title></head><body>${innerBodyHtml}</body></html>`;
 }
 
-ipcMain.handle('scribe:openHtmlDocument', async (event): Promise<OpenHtmlDocumentResult> => {
-  const win = BrowserWindow.fromWebContents(event.sender);
-  const { canceled, filePaths } = await dialog.showOpenDialog(win ?? undefined, {
-    properties: ['openFile'],
-    filters: [{ name: 'HTML', extensions: ['html', 'htm', 'txt'] }],
+function inferOpenFormat(filePath: string): 'html' | 'markdown' {
+  const lower = filePath.toLowerCase();
+  if (lower.endsWith('.md') || lower.endsWith('.markdown')) {
+    return 'markdown';
+  }
+  return 'html';
+}
+
+function wrapHtmlForPdf(innerBodyHtml: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Document</title><style>
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:11pt;line-height:1.55;color:#111;max-width:720px;margin:24px auto;padding:0 16px;}
+h1{font-size:1.75em;margin:0.6em 0 0.35em;font-weight:600;}
+h2{font-size:1.4em;margin:0.8em 0 0.35em;font-weight:600;}
+h3{font-size:1.15em;margin:0.8em 0 0.35em;font-weight:600;}
+p{margin:0.5em 0;}
+pre,code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:0.92em;}
+pre{background:#f4f4f5;padding:12px;border-radius:6px;overflow:auto;}
+blockquote{border-left:3px solid #ccc;margin:1em 0;padding-left:1em;color:#444;}
+hr{border:none;border-top:1px solid #ddd;margin:1.5em 0;}
+a{color:#2563eb;}
+ul,ol{padding-left:1.5em;}
+table{border-collapse:collapse;width:100%;margin:1em 0;}
+th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;}
+</style></head><body>${innerBodyHtml}</body></html>`;
+}
+
+async function loadDataUrl(win: BrowserWindow, html: string): Promise<void> {
+  const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+  await new Promise<void>((resolve, reject) => {
+    win.webContents.once('did-fail-load', (_e, _code, desc) => {
+      reject(new Error(desc || 'Failed to load document for PDF'));
+    });
+    win.webContents.once('did-finish-load', () => {
+      resolve();
+    });
+    void win.loadURL(dataUrl);
   });
+}
+
+ipcMain.handle('scribe:openDocument', async (event): Promise<OpenDocumentResult> => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const openOpts = {
+    properties: ['openFile' as const],
+    filters: [
+      {
+        name: 'Documents',
+        extensions: ['html', 'htm', 'txt', 'md', 'markdown'],
+      },
+    ],
+  };
+  const { canceled, filePaths } = await (win
+    ? dialog.showOpenDialog(win, openOpts)
+    : dialog.showOpenDialog(openOpts));
   if (canceled || !filePaths[0]) {
     return { ok: false, cancelled: true };
   }
   const filePath = path.resolve(filePaths[0]);
   try {
-    const html = await fs.readFile(filePath, 'utf8');
+    const text = await fs.readFile(filePath, 'utf8');
     const name = path.basename(filePath);
-    return { ok: true, path: filePath, name, html };
+    const format = inferOpenFormat(filePath);
+    return { ok: true, path: filePath, name, text, format };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Could not read file';
     return { ok: false, error: message };
@@ -93,10 +144,13 @@ ipcMain.handle(
   'scribe:saveHtmlAs',
   async (event, payload: { htmlBody: string; defaultPath?: string }): Promise<SaveHtmlAsResult> => {
     const win = BrowserWindow.fromWebContents(event.sender);
-    const { canceled, filePath } = await dialog.showSaveDialog(win ?? undefined, {
+    const saveOpts = {
       defaultPath: payload.defaultPath,
       filters: [{ name: 'HTML', extensions: ['html', 'htm'] }],
-    });
+    };
+    const { canceled, filePath } = await (win
+      ? dialog.showSaveDialog(win, saveOpts)
+      : dialog.showSaveDialog(saveOpts));
     if (canceled || !filePath) {
       return { ok: false, cancelled: true };
     }
@@ -107,6 +161,91 @@ ipcMain.handle(
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Save failed';
       return { ok: false, error: message };
+    }
+  },
+);
+
+ipcMain.handle(
+  'scribe:saveMarkdownToPath',
+  async (_event, payload: { path: string; markdown: string }): Promise<SaveMarkdownToPathResult> => {
+    try {
+      await fs.writeFile(payload.path, payload.markdown, 'utf8');
+      return { ok: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Save failed';
+      return { ok: false, error: message };
+    }
+  },
+);
+
+ipcMain.handle(
+  'scribe:saveMarkdownAs',
+  async (event, payload: { markdown: string; defaultPath?: string }): Promise<SaveMarkdownAsResult> => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const mdSaveOpts = {
+      defaultPath: payload.defaultPath,
+      filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }],
+    };
+    const { canceled, filePath } = await (win
+      ? dialog.showSaveDialog(win, mdSaveOpts)
+      : dialog.showSaveDialog(mdSaveOpts));
+    if (canceled || !filePath) {
+      return { ok: false, cancelled: true };
+    }
+    const outPath = path.resolve(filePath);
+    try {
+      await fs.writeFile(outPath, payload.markdown, 'utf8');
+      return { ok: true, path: outPath };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Save failed';
+      return { ok: false, error: message };
+    }
+  },
+);
+
+ipcMain.handle(
+  'scribe:exportPdf',
+  async (event, payload: { htmlBody: string; defaultPath?: string }): Promise<ExportPdfResult> => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    let defaultPath = payload.defaultPath;
+    if (defaultPath) {
+      const dir = path.dirname(defaultPath);
+      const base = path.basename(defaultPath, path.extname(defaultPath));
+      defaultPath = path.join(dir, `${base}.pdf`);
+    } else {
+      defaultPath = 'document.pdf';
+    }
+    const pdfSaveOpts = {
+      defaultPath,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    };
+    const { canceled, filePath } = await (win
+      ? dialog.showSaveDialog(win, pdfSaveOpts)
+      : dialog.showSaveDialog(pdfSaveOpts));
+    if (canceled || !filePath) {
+      return { ok: false, cancelled: true };
+    }
+    const outPath = path.resolve(filePath);
+    const hidden = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true,
+      },
+    });
+    try {
+      await loadDataUrl(hidden, wrapHtmlForPdf(payload.htmlBody));
+      const pdfBuffer = await hidden.webContents.printToPDF({
+        printBackground: true,
+        margins: { marginType: 'default' },
+      });
+      await fs.writeFile(outPath, pdfBuffer);
+      return { ok: true, path: outPath };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'PDF export failed';
+      return { ok: false, error: message };
+    } finally {
+      hidden.destroy();
     }
   },
 );

@@ -2,9 +2,12 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 import type {
   DocumentChatBundle,
-  OpenHtmlDocumentResult,
+  ExportPdfResult,
+  OpenDocumentResult,
   SaveHtmlAsResult,
   SaveHtmlToPathResult,
+  SaveMarkdownAsResult,
+  SaveMarkdownToPathResult,
   ScribeAutocompleteResult,
   ScribeSetSettingsInput,
   ScribeSettingsPublic,
@@ -20,11 +23,17 @@ contextBridge.exposeInMainWorld('scribe', {
     ipcRenderer.invoke('scribe:getDocumentChatBundle', documentKey),
   saveDocumentChatBundle: (documentKey: string, bundle: DocumentChatBundle): Promise<void> =>
     ipcRenderer.invoke('scribe:saveDocumentChatBundle', { documentKey, bundle }),
-  openHtmlDocument: (): Promise<OpenHtmlDocumentResult> => ipcRenderer.invoke('scribe:openHtmlDocument'),
+  openDocument: (): Promise<OpenDocumentResult> => ipcRenderer.invoke('scribe:openDocument'),
   saveHtmlToPath: (filePath: string, htmlBody: string): Promise<SaveHtmlToPathResult> =>
     ipcRenderer.invoke('scribe:saveHtmlToPath', { path: filePath, htmlBody }),
   saveHtmlAs: (input: { htmlBody: string; defaultPath?: string }): Promise<SaveHtmlAsResult> =>
     ipcRenderer.invoke('scribe:saveHtmlAs', input),
+  saveMarkdownToPath: (filePath: string, markdown: string): Promise<SaveMarkdownToPathResult> =>
+    ipcRenderer.invoke('scribe:saveMarkdownToPath', { path: filePath, markdown }),
+  saveMarkdownAs: (input: { markdown: string; defaultPath?: string }): Promise<SaveMarkdownAsResult> =>
+    ipcRenderer.invoke('scribe:saveMarkdownAs', input),
+  exportPdf: (input: { htmlBody: string; defaultPath?: string }): Promise<ExportPdfResult> =>
+    ipcRenderer.invoke('scribe:exportPdf', input),
   documentChatStream: (params: {
     messages: unknown[];
     documentHtml: string;

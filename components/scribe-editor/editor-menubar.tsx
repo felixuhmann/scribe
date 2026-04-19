@@ -29,6 +29,8 @@ export type EditorMenubarProps = {
   onOpenFile: () => void;
   onSaveDocument: () => void;
   onSaveHtmlAs: () => void;
+  onSaveMarkdownAs: () => void;
+  onExportPdf: () => void;
   onOpenLink: () => void;
   onOpenSettings: () => void;
 };
@@ -43,6 +45,8 @@ export function EditorMenubar({
   onOpenFile,
   onSaveDocument,
   onSaveHtmlAs,
+  onSaveMarkdownAs,
+  onExportPdf,
   onOpenLink,
   onOpenSettings,
 }: EditorMenubarProps) {
@@ -77,10 +81,16 @@ export function EditorMenubar({
             <MenubarShortcut>{mod}S</MenubarShortcut>
           </MenubarItem>
           <MenubarItem disabled={!ed} onSelect={onSaveHtmlAs}>
-            Save as…
+            Save as HTML…
             <MenubarShortcut>⇧{mod}S</MenubarShortcut>
           </MenubarItem>
+          <MenubarItem disabled={!ed} onSelect={onSaveMarkdownAs}>
+            Save as Markdown…
+          </MenubarItem>
           <MenubarSeparator />
+          <MenubarItem disabled={!ed} onSelect={onExportPdf}>
+            Export PDF…
+          </MenubarItem>
           <MenubarItem onSelect={() => window.print()}>
             Print…
             <MenubarShortcut>{mod}P</MenubarShortcut>

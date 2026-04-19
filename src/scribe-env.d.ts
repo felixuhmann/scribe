@@ -1,8 +1,11 @@
 import type {
   DocumentChatBundle,
-  OpenHtmlDocumentResult,
+  ExportPdfResult,
+  OpenDocumentResult,
   SaveHtmlAsResult,
   SaveHtmlToPathResult,
+  SaveMarkdownAsResult,
+  SaveMarkdownToPathResult,
   ScribeAutocompleteResult,
   ScribeSetSettingsInput,
   ScribeSettingsPublic,
@@ -18,9 +21,12 @@ declare global {
       setSettings: (patch: ScribeSetSettingsInput) => Promise<ScribeSettingsPublic>;
       getDocumentChatBundle: (documentKey: string) => Promise<DocumentChatBundle>;
       saveDocumentChatBundle: (documentKey: string, bundle: DocumentChatBundle) => Promise<void>;
-      openHtmlDocument: () => Promise<OpenHtmlDocumentResult>;
+      openDocument: () => Promise<OpenDocumentResult>;
       saveHtmlToPath: (filePath: string, htmlBody: string) => Promise<SaveHtmlToPathResult>;
       saveHtmlAs: (input: { htmlBody: string; defaultPath?: string }) => Promise<SaveHtmlAsResult>;
+      saveMarkdownToPath: (filePath: string, markdown: string) => Promise<SaveMarkdownToPathResult>;
+      saveMarkdownAs: (input: { markdown: string; defaultPath?: string }) => Promise<SaveMarkdownAsResult>;
+      exportPdf: (input: { htmlBody: string; defaultPath?: string }) => Promise<ExportPdfResult>;
       documentChatStream: (params: {
         messages: unknown[];
         documentHtml: string;

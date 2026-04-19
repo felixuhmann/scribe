@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 
-import { useDocumentWorkspace } from '@/components/document-workspace-context';
+import {
+  inferContentFormatFromDocumentKey,
+  useDocumentWorkspace,
+} from '@/components/document-workspace-context';
 import { useEditorSession } from '@/components/editor-session-context';
+import { formatMarkdownFidelityPrompt, getMarkdownFidelityWarnings } from '@/lib/markdown-fidelity';
+import { editorHtmlToMarkdown, markdownToEditorHtml } from '@/lib/markdown-io';
 import { LinkDialog } from './link-dialog';
 import { EditorMenubar } from './editor-menubar';
 import { SettingsDialog } from './settings-dialog';
@@ -15,6 +20,7 @@ export function ScribeEditorChrome() {
   const {
     documentKey,
     diskAbsolutePath,
+
     syncDocumentBaseline,
     noteEditorHtmlChanged,
     notifyOpenedLocalFile,
@@ -29,14 +35,22 @@ export function ScribeEditorChrome() {
 
   const openFilePicker = () => fileInputRef.current?.click();
 
+  const confirmMarkdownExportIfNeeded = useCallback((html: string): boolean => {
+    const warnings = getMarkdownFidelityWarnings(html);
+    if (warnings.length === 0) return true;
+    return window.confirm(formatMarkdownFidelityPrompt(warnings));
+  }, []);
+
   const openDocument = useCallback(async () => {
     if (!editor) return;
-    const api = window.scribe?.openHtmlDocument;
+    const api = window.scribe?.openDocument;
     if (api) {
       const result = await api();
       if (!result.ok) return;
       notifyOpenedFromDisk(result.path);
-      editor.chain().focus().setContent(result.html, { emitUpdate: true }).run();
+      const html =
+        result.format === 'markdown' ? markdownToEditorHtml(result.text) : result.text;
+      editor.chain().focus().setContent(html, { emitUpdate: true }).run();
       return;
     }
     openFilePicker();
@@ -46,8 +60,13 @@ export function ScribeEditorChrome() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !editor) return;
-    void file.text().then((html) => {
+    void file.text().then((text) => {
       notifyOpenedLocalFile(file);
+      const lower = file.name.toLowerCase();
+      const html =
+        lower.endsWith('.md') || lower.endsWith('.markdown')
+          ? markdownToEditorHtml(text)
+          : text;
       editor.chain().focus().setContent(html, { emitUpdate: true }).run();
     });
   };
@@ -78,22 +97,97 @@ export function ScribeEditorChrome() {
     a.download = 'document.html';
     a.click();
     URL.revokeObjectURL(a.href);
+    syncDocumentBaseline(htmlBody);
   }, [adoptSavedFilePath, diskAbsolutePath, editor, syncDocumentBaseline]);
 
-  const saveDocument = useCallback(async () => {
+  const saveAsMarkdown = useCallback(async () => {
     if (!editor) return;
     const htmlBody = editor.getHTML();
-    const toPath = window.scribe?.saveHtmlToPath;
-    const asDialog = window.scribe?.saveHtmlAs;
-    if (diskAbsolutePath && toPath) {
-      const result = await toPath(diskAbsolutePath, htmlBody);
+    if (!confirmMarkdownExportIfNeeded(htmlBody)) return;
+    const markdown = editorHtmlToMarkdown(htmlBody);
+    const api = window.scribe?.saveMarkdownAs;
+    if (api) {
+      const result = await api({
+        markdown,
+        defaultPath: diskAbsolutePath ?? undefined,
+      });
       if (result.ok) {
+        adoptSavedFilePath(result.path);
         syncDocumentBaseline(htmlBody);
       }
       return;
     }
-    if (asDialog) {
-      const result = await asDialog({
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'document.md';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    syncDocumentBaseline(htmlBody);
+  }, [
+    adoptSavedFilePath,
+    confirmMarkdownExportIfNeeded,
+    diskAbsolutePath,
+    editor,
+    syncDocumentBaseline,
+  ]);
+
+  const saveDocument = useCallback(async () => {
+    if (!editor) return;
+    const htmlBody = editor.getHTML();
+    const fmt = inferContentFormatFromDocumentKey(documentKey);
+    const toHtmlPath = window.scribe?.saveHtmlToPath;
+    const toMdPath = window.scribe?.saveMarkdownToPath;
+    const asHtmlDialog = window.scribe?.saveHtmlAs;
+    const asMdDialog = window.scribe?.saveMarkdownAs;
+
+    if (diskAbsolutePath) {
+      if (fmt === 'markdown') {
+        if (!confirmMarkdownExportIfNeeded(htmlBody)) return;
+        const markdown = editorHtmlToMarkdown(htmlBody);
+        if (toMdPath) {
+          const result = await toMdPath(diskAbsolutePath, markdown);
+          if (result.ok) {
+            syncDocumentBaseline(htmlBody);
+          }
+        }
+        return;
+      }
+      if (toHtmlPath) {
+        const result = await toHtmlPath(diskAbsolutePath, htmlBody);
+        if (result.ok) {
+          syncDocumentBaseline(htmlBody);
+        }
+      }
+      return;
+    }
+
+    if (fmt === 'markdown') {
+      if (!confirmMarkdownExportIfNeeded(htmlBody)) return;
+      const markdown = editorHtmlToMarkdown(htmlBody);
+      if (asMdDialog) {
+        const result = await asMdDialog({
+          markdown,
+          defaultPath: diskAbsolutePath ?? undefined,
+        });
+        if (result.ok) {
+          adoptSavedFilePath(result.path);
+          syncDocumentBaseline(htmlBody);
+        }
+      } else {
+        const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'document.md';
+        a.click();
+        URL.revokeObjectURL(a.href);
+        syncDocumentBaseline(htmlBody);
+      }
+      return;
+    }
+
+    if (asHtmlDialog) {
+      const result = await asHtmlDialog({
         htmlBody,
         defaultPath: diskAbsolutePath ?? undefined,
       });
@@ -104,7 +198,26 @@ export function ScribeEditorChrome() {
     } else {
       await saveAsHtml();
     }
-  }, [adoptSavedFilePath, diskAbsolutePath, editor, saveAsHtml, syncDocumentBaseline]);
+  }, [
+    adoptSavedFilePath,
+    confirmMarkdownExportIfNeeded,
+    diskAbsolutePath,
+    documentKey,
+    editor,
+    saveAsHtml,
+    syncDocumentBaseline,
+  ]);
+
+  const exportPdf = useCallback(async () => {
+    if (!editor) return;
+    const htmlBody = editor.getHTML();
+    const api = window.scribe?.exportPdf;
+    if (api) {
+      await api({ htmlBody, defaultPath: diskAbsolutePath ?? undefined });
+      return;
+    }
+    window.print();
+  }, [diskAbsolutePath, editor]);
 
   const newDocument = () => {
     if (!editor) return;
@@ -155,14 +268,14 @@ export function ScribeEditorChrome() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [saveAsHtml, saveDocument]);
+  }, [editor, saveAsHtml, saveDocument]);
 
   return (
     <>
       <input
         ref={fileInputRef}
         type="file"
-        accept=".html,.htm,.txt,text/html"
+        accept=".html,.htm,.txt,.md,.markdown,text/html,text/markdown"
         className="sr-only"
         aria-hidden
         tabIndex={-1}
@@ -189,6 +302,8 @@ export function ScribeEditorChrome() {
               onOpenFile={openDocument}
               onSaveDocument={() => void saveDocument()}
               onSaveHtmlAs={() => void saveAsHtml()}
+              onSaveMarkdownAs={() => void saveAsMarkdown()}
+              onExportPdf={() => void exportPdf()}
               onOpenLink={() => setLinkOpen(true)}
               onOpenSettings={() => setSettingsOpen(true)}
             />

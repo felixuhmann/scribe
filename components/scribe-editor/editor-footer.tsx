@@ -1,4 +1,4 @@
-import { CheckCircle2, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 import { useDocumentWorkspace } from '@/components/document-workspace-context';
 import { Button } from '@/components/ui/button';

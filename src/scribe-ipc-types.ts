@@ -53,12 +53,22 @@ export type DocumentChatBundle = {
   sessions: StoredChatSession[];
 };
 
-export type OpenHtmlDocumentResult =
-  | { ok: true; path: string; name: string; html: string }
+export type OpenDocumentResult =
+  | { ok: true; path: string; name: string; text: string; format: 'html' | 'markdown' }
   | { ok: false; cancelled?: true; error?: string };
 
 export type SaveHtmlToPathResult = { ok: true } | { ok: false; error: string };
 
 export type SaveHtmlAsResult =
+  | { ok: true; path: string }
+  | { ok: false; cancelled?: true; error?: string };
+
+export type SaveMarkdownToPathResult = { ok: true } | { ok: false; error: string };
+
+export type SaveMarkdownAsResult =
+  | { ok: true; path: string }
+  | { ok: false; cancelled?: true; error?: string };
+
+export type ExportPdfResult =
   | { ok: true; path: string }
   | { ok: false; cancelled?: true; error?: string };

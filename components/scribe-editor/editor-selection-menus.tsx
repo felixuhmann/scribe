@@ -12,7 +12,7 @@ const floatingClassName = bubbleClassName;
 export function EditorSelectionMenus({ editor }: { editor: Editor }) {
   return (
     <>
-      <BubbleMenu className={bubbleClassName}>
+      <BubbleMenu editor={editor} className={bubbleClassName}>
         <Button
           type="button"
           size="sm"
@@ -44,7 +44,7 @@ export function EditorSelectionMenus({ editor }: { editor: Editor }) {
           Underline
         </Button>
       </BubbleMenu>
-      <FloatingMenu className={floatingClassName}>
+      <FloatingMenu editor={editor} className={floatingClassName}>
         <Button
           type="button"
           size="sm"
