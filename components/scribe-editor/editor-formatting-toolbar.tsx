@@ -1,5 +1,5 @@
 import type { Editor } from '@tiptap/core';
-import { useTiptap, useTiptapState } from '@tiptap/react';
+import { useEditorState } from '@tiptap/react';
 import {
   AlignCenter,
   AlignJustify,
@@ -31,14 +31,23 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import type { AlignValue, BlockStyle } from './use-editor-chrome-state';
 
 function ToolbarSeparator() {
-  return <Separator orientation="vertical" className="hidden h-6 sm:block" decorative />;
+  return <Separator orientation="vertical" className="hidden h-5 sm:block" decorative />;
 }
 
-function ListToolbarToggles() {
-  const { editor } = useTiptap();
-  const bullet = useTiptapState((s) => s.editor.isActive('bulletList'));
-  const ordered = useTiptapState((s) => s.editor.isActive('orderedList'));
-  const quote = useTiptapState((s) => s.editor.isActive('blockquote'));
+function ListToolbarToggles({ editor }: { editor: Editor }) {
+  const listState = useEditorState({
+    editor,
+    selector: (ctx) => ({
+      bullet: ctx.editor.isActive('bulletList'),
+      ordered: ctx.editor.isActive('orderedList'),
+      quote: ctx.editor.isActive('blockquote'),
+    }),
+  });
+  const { bullet, ordered, quote } = listState ?? {
+    bullet: false,
+    ordered: false,
+    quote: false,
+  };
 
   const listValues: string[] = [
     ...(bullet ? ['bullet'] : []),
@@ -79,10 +88,15 @@ function ListToolbarToggles() {
   );
 }
 
-function SubSuperToolbarToggles() {
-  const { editor } = useTiptap();
-  const sub = useTiptapState((s) => s.editor.isActive('subscript'));
-  const sup = useTiptapState((s) => s.editor.isActive('superscript'));
+function SubSuperToolbarToggles({ editor }: { editor: Editor }) {
+  const subSuper = useEditorState({
+    editor,
+    selector: (ctx) => ({
+      sub: ctx.editor.isActive('subscript'),
+      sup: ctx.editor.isActive('superscript'),
+    }),
+  });
+  const { sub, sup } = subSuper ?? { sub: false, sup: false };
 
   const values: string[] = [...(sub ? ['sub'] : []), ...(sup ? ['super'] : [])];
 
@@ -144,13 +158,13 @@ export function EditorFormattingToolbar({
   onOpenLink,
 }: EditorFormattingToolbarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5 border-t border-border px-2 py-1.5">
+    <div className="flex flex-wrap items-center gap-1 border-t border-border px-2 py-1">
       <div className="flex items-center gap-0.5">
         <Button
           type="button"
           size="sm"
           variant="outline"
-          className="size-7 p-0"
+          className="size-6 p-0"
           disabled={!canUndo}
           title="Undo"
           onClick={() => editor.chain().focus().undo().run()}
@@ -162,7 +176,7 @@ export function EditorFormattingToolbar({
           type="button"
           size="sm"
           variant="outline"
-          className="size-7 p-0"
+          className="size-6 p-0"
           disabled={!canRedo}
           title="Redo"
           onClick={() => editor.chain().focus().redo().run()}
@@ -288,11 +302,11 @@ export function EditorFormattingToolbar({
 
       <ToolbarSeparator />
 
-      <ListToolbarToggles />
+      <ListToolbarToggles editor={editor} />
 
       <ToolbarSeparator />
 
-      <SubSuperToolbarToggles />
+      <SubSuperToolbarToggles editor={editor} />
 
       <ToolbarSeparator />
 

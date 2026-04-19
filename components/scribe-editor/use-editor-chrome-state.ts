@@ -1,5 +1,7 @@
-import { useTiptap, useTiptapState } from '@tiptap/react';
+import { useEditorState } from '@tiptap/react';
 import { useMemo } from 'react';
+
+import { useEditorSession } from '@/components/editor-session-context';
 
 import { useModLabel } from './utils';
 
@@ -7,33 +9,80 @@ export type BlockStyle = 'p' | 'h1' | 'h2' | 'h3';
 export type AlignValue = 'left' | 'center' | 'right' | 'justify';
 
 export function useEditorChromeState() {
-  const { editor } = useTiptap();
+  const { editor } = useEditorSession();
   const mod = useModLabel();
 
-  const canUndo = useTiptapState((s) => s.editor.can().undo());
-  const canRedo = useTiptapState((s) => s.editor.can().redo());
-
-  const isBold = useTiptapState((s) => s.editor.isActive('bold'));
-  const isItalic = useTiptapState((s) => s.editor.isActive('italic'));
-  const isStrike = useTiptapState((s) => s.editor.isActive('strike'));
-  const isUnderline = useTiptapState((s) => s.editor.isActive('underline'));
-  const isCode = useTiptapState((s) => s.editor.isActive('code'));
-
-  const blockStyle = useTiptapState((s) => {
-    const e = s.editor;
-    if (e.isActive('heading', { level: 1 })) return 'h1' as const;
-    if (e.isActive('heading', { level: 2 })) return 'h2' as const;
-    if (e.isActive('heading', { level: 3 })) return 'h3' as const;
-    return 'p' as const;
+  const tool = useEditorState({
+    editor,
+    selector: (ctx) => {
+      const ed = ctx.editor;
+      if (!ed) {
+        return {
+          canUndo: false,
+          canRedo: false,
+          isBold: false,
+          isItalic: false,
+          isStrike: false,
+          isUnderline: false,
+          isCode: false,
+          blockStyle: 'p' as BlockStyle,
+          textAlign: 'left' as AlignValue,
+          wordCount: 0,
+        };
+      }
+      const blockStyle: BlockStyle = ed.isActive('heading', { level: 1 })
+        ? 'h1'
+        : ed.isActive('heading', { level: 2 })
+          ? 'h2'
+          : ed.isActive('heading', { level: 3 })
+            ? 'h3'
+            : 'p';
+      const textAlign: AlignValue = ed.isActive({ textAlign: 'justify' })
+        ? 'justify'
+        : ed.isActive({ textAlign: 'right' })
+          ? 'right'
+          : ed.isActive({ textAlign: 'center' })
+            ? 'center'
+            : 'left';
+      const text = ed.state.doc.textContent;
+      return {
+        canUndo: ed.can().undo(),
+        canRedo: ed.can().redo(),
+        isBold: ed.isActive('bold'),
+        isItalic: ed.isActive('italic'),
+        isStrike: ed.isActive('strike'),
+        isUnderline: ed.isActive('underline'),
+        isCode: ed.isActive('code'),
+        blockStyle,
+        textAlign,
+        wordCount: text.split(/\s+/).filter(Boolean).length,
+      };
+    },
   });
 
-  const textAlign = useTiptapState((s) => {
-    const e = s.editor;
-    if (e.isActive({ textAlign: 'justify' })) return 'justify' as const;
-    if (e.isActive({ textAlign: 'right' })) return 'right' as const;
-    if (e.isActive({ textAlign: 'center' })) return 'center' as const;
-    return 'left' as const;
-  });
+  const {
+    canUndo,
+    canRedo,
+    isBold,
+    isItalic,
+    isStrike,
+    isUnderline,
+    isCode,
+    blockStyle,
+    textAlign,
+    wordCount,
+  } = tool ?? {
+    canUndo: false,
+    canRedo: false,
+    isBold: false,
+    isItalic: false,
+    isStrike: false,
+    isUnderline: false,
+    isCode: false,
+    blockStyle: 'p' as const,
+    textAlign: 'left' as const,
+    wordCount: 0,
+  };
 
   const markValues = useMemo(
     () =>
@@ -46,11 +95,6 @@ export function useEditorChromeState() {
       ] as string[],
     [isBold, isItalic, isStrike, isUnderline, isCode],
   );
-
-  const wordCount = useTiptapState((state) => {
-    const text = state.editor.state.doc.textContent;
-    return text.split(/\s+/).filter(Boolean).length;
-  });
 
   return {
     editor,

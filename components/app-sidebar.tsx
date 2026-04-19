@@ -10,17 +10,17 @@ import { DocumentChatPanel } from '@/components/document-chat-panel';
 
 export function AppSidebar() {
   return (
-    <Sidebar collapsible="offcanvas">
-      <SidebarHeader className="border-sidebar-border shrink-0 border-b px-3 py-3">
+    <Sidebar collapsible="none">
+      <SidebarHeader className="border-sidebar-border shrink-0 border-b px-3 py-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" type="button">
-              <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg font-semibold">
+            <SidebarMenuButton size="default" type="button" className="h-10">
+              <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-7 items-center justify-center rounded-md font-semibold text-sm">
                 S
               </div>
               <div className="flex flex-col gap-0.5 leading-none">
-                <span className="font-semibold">Scribe</span>
-                <span className="text-sidebar-foreground/70 text-xs">Documents</span>
+                <span className="text-sm font-semibold">Scribe</span>
+                <span className="text-sidebar-foreground/70 text-[0.65rem]">Documents</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>

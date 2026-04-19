@@ -3,11 +3,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { Tiptap, useEditor } from '@tiptap/react';
 
 import { useEditorSession } from '@/components/editor-session-context';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 import { TabAutocomplete } from '@/lib/tiptap-tab-autocomplete-extension';
 
 import { AUTOCOMPLETE_DEBOUNCE_MS, DEFAULT_DOC, EDITOR_EXTENSIONS } from './constants';
-import { ScribeEditorChrome } from './editor-chrome';
+import { EditorFormattingToolbar } from './editor-formatting-toolbar';
 import { ScribeEditorFooter } from './editor-footer';
+import { useEditorChromeState } from './use-editor-chrome-state';
 import { EditorSelectionMenus } from './editor-selection-menus';
 import { useEditorTabAutocomplete } from './use-editor-tab-autocomplete';
 
@@ -31,7 +33,14 @@ export function ScribeEditor() {
 }
 
 function ScribeEditorInner({ editor }: { editor: Editor }) {
-  const { setEditor } = useEditorSession();
+  const { setEditor, registerSettingsSavedHandler, requestOpenLinkDialog } = useEditorSession();
+  const chrome = useEditorChromeState();
+  const formattingChrome = ((ctx: typeof chrome) => {
+    const { mod, wordCount, ...rest } = ctx;
+    void mod;
+    void wordCount;
+    return rest;
+  })(chrome);
 
   useEffect(() => {
     setEditor(editor);
@@ -55,6 +64,10 @@ function ScribeEditorInner({ editor }: { editor: Editor }) {
   useEffect(() => {
     refreshTabAutocompleteSettings();
   }, [refreshTabAutocompleteSettings]);
+
+  useEffect(() => {
+    return registerSettingsSavedHandler(refreshTabAutocompleteSettings);
+  }, [registerSettingsSavedHandler, refreshTabAutocompleteSettings]);
 
   const toggleTabAutocomplete = useCallback(async () => {
     const next = !tabAutocomplete.enabled;
@@ -82,7 +95,18 @@ function ScribeEditorInner({ editor }: { editor: Editor }) {
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <Tiptap editor={editor}>
         <div className="bg-card flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <ScribeEditorChrome onAiSettingsSaved={refreshTabAutocompleteSettings} />
+          <div
+            className="border-border bg-card/80 flex shrink-0 items-center gap-2 border-b px-2 py-1"
+            role="toolbar"
+            aria-label="Document view controls"
+          >
+            <SidebarTrigger className="-ml-0.5" />
+          </div>
+          <EditorFormattingToolbar
+            {...formattingChrome}
+            editor={editor}
+            onOpenLink={requestOpenLinkDialog}
+          />
           <div
             className="scribe-editor-desk min-h-0 flex-1 overflow-y-auto"
             role="presentation"

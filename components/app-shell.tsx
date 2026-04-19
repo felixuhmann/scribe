@@ -5,6 +5,7 @@ import { useCallback, useRef, useState } from 'react';
 
 import { AppSidebar } from '@/components/app-sidebar';
 import { ScribeEditor } from '@/components/scribe-editor';
+import { ScribeEditorChrome } from '@/components/scribe-editor/editor-chrome';
 import { SidebarInset, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 
@@ -111,9 +112,10 @@ export function AppShell() {
 
   return (
     <SidebarProvider
-      className="flex h-full min-h-0 w-full"
+      className="flex h-full min-h-0 w-full flex-col"
       style={{ '--sidebar-width': `${sidebarWidthPx}px` } as CSSProperties}
     >
+      <ScribeEditorChrome />
       <DesktopSplit sidebarWidthPx={sidebarWidthPx} onSidebarWidthPxChange={setSidebarWidthPx} />
     </SidebarProvider>
   );
