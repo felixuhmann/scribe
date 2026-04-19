@@ -1,9 +1,12 @@
 import type { Editor } from '@tiptap/core';
 import { useCallback, useEffect, useRef } from 'react';
 
-import { AUTOCOMPLETE_DEBOUNCE_MS } from './constants';
+export type EditorTabAutocompleteOptions = {
+  enabled: boolean;
+  debounceMs: number;
+};
 
-export function useEditorTabAutocomplete(editor: Editor) {
+export function useEditorTabAutocomplete(editor: Editor, options: EditorTabAutocompleteOptions) {
   const requestSeq = useRef(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -15,6 +18,11 @@ export function useEditorTabAutocomplete(editor: Editor) {
   }, []);
 
   useEffect(() => {
+    if (!options.enabled) {
+      editor.commands.setTabAutocompleteGhost(null, null);
+      return;
+    }
+
     const runSuggest = async (anchorPos: number) => {
       const api = window.scribe?.autocompleteSuggest;
       if (!api) return;
@@ -60,7 +68,7 @@ export function useEditorTabAutocomplete(editor: Editor) {
       debounceRef.current = setTimeout(() => {
         debounceRef.current = null;
         void runSuggest(anchorPos);
-      }, AUTOCOMPLETE_DEBOUNCE_MS);
+      }, options.debounceMs);
     };
 
     editor.on('update', schedule);
@@ -73,5 +81,5 @@ export function useEditorTabAutocomplete(editor: Editor) {
       requestSeq.current += 1;
       editor.commands.setTabAutocompleteGhost(null, null);
     };
-  }, [editor, clearDebounce]);
+  }, [editor, clearDebounce, options.enabled, options.debounceMs]);
 }

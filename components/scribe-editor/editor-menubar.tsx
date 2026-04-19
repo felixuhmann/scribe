@@ -27,6 +27,7 @@ export type EditorMenubarProps = {
   onOpenFile: () => void;
   onSaveHtml: () => void;
   onOpenLink: () => void;
+  onOpenSettings: () => void;
 };
 
 export function EditorMenubar({
@@ -39,9 +40,20 @@ export function EditorMenubar({
   onOpenFile,
   onSaveHtml,
   onOpenLink,
+  onOpenSettings,
 }: EditorMenubarProps) {
   return (
     <Menubar className="h-auto min-h-8 flex-1 border-0 bg-transparent p-0 shadow-none">
+      <MenubarMenu>
+        <MenubarTrigger>Scribe</MenubarTrigger>
+        <MenubarContent>
+          <MenubarItem onSelect={onOpenSettings}>
+            Settings…
+            <MenubarShortcut>{mod},</MenubarShortcut>
+          </MenubarItem>
+        </MenubarContent>
+      </MenubarMenu>
+
       <MenubarMenu>
         <MenubarTrigger>File</MenubarTrigger>
         <MenubarContent>

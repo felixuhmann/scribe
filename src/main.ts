@@ -1,9 +1,16 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import { config } from 'dotenv';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
 import { runAutocomplete } from './autocomplete-agent';
+import type { ScribeSetSettingsInput } from './scribe-ipc-types';
+import {
+  applySettingsPatch,
+  getPublicSettings,
+  readStoredSettings,
+  resolveOpenAiApiKey,
+} from './settings-store';
 
 config({ path: path.resolve(process.cwd(), '.env') });
 
@@ -14,21 +21,46 @@ if (started) {
 
 let autocompleteAbort: AbortController | null = null;
 
+ipcMain.handle('scribe:getSettings', async () => {
+  const stored = await readStoredSettings();
+  return getPublicSettings(stored);
+});
+
+ipcMain.handle('scribe:setSettings', async (_event, patch: ScribeSetSettingsInput) => {
+  const current = await readStoredSettings();
+  const next = await applySettingsPatch(current, patch);
+  return getPublicSettings(next);
+});
+
 ipcMain.handle(
   'scribe:autocomplete',
   async (_event, payload: { before: string; after: string }) => {
     autocompleteAbort?.abort();
     autocompleteAbort = new AbortController();
     const { signal } = autocompleteAbort;
-    const apiKey = process.env.OPENAI_API_KEY;
+    const stored = await readStoredSettings();
+    const apiKey = resolveOpenAiApiKey(stored);
     if (!apiKey) {
       return {
         ok: false as const,
-        error: 'Missing OPENAI_API_KEY. Add it to a .env file at the project root.',
+        error:
+          'No OpenAI API key found. Add OPENAI_API_KEY to a .env file, or set a key in Settings.',
       };
     }
+    if (!stored.autocompleteEnabled) {
+      return { ok: false as const, error: 'Autocomplete is turned off in Settings.' };
+    }
     try {
-      const text = await runAutocomplete(apiKey, payload, signal);
+      const text = await runAutocomplete(
+        apiKey,
+        payload,
+        {
+          model: stored.model,
+          temperature: stored.autocompleteTemperature,
+          maxOutputTokens: stored.autocompleteMaxOutputTokens,
+        },
+        signal,
+      );
       if (signal.aborted) {
         return { ok: false as const, cancelled: true as const };
       }
@@ -71,7 +103,11 @@ const createWindow = () => {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('ready', createWindow);
+app.on('ready', () => {
+  // Electron’s default File/Edit/View menu (Windows/Linux). We use an in-app menubar instead.
+  Menu.setApplicationMenu(null);
+  createWindow();
+});
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
