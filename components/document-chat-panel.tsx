@@ -71,8 +71,13 @@ type DocumentChatSessionViewProps = {
   initialMessages: DocumentChatUIMessage[];
   initialLastAgentDocumentHtml?: string;
   editorReady: boolean;
-  onPersistSession: (sessionId: string, messages: DocumentChatUIMessage[]) => void;
-  onPersistAgentSnapshot: (sessionId: string, html: string) => void;
+  /** `persistDocumentKey` is always the document this session belongs to (may differ from the panel’s current doc). */
+  onPersistSession: (
+    sessionId: string,
+    messages: DocumentChatUIMessage[],
+    persistDocumentKey: string,
+  ) => void;
+  onPersistAgentSnapshot: (sessionId: string, html: string, persistDocumentKey: string) => void;
 };
 
 function DocumentChatSessionView({
@@ -108,10 +113,10 @@ function DocumentChatSessionView({
         if (!ed) return;
         const snapshot = ed.getHTML();
         lastSeenRef.current = snapshot;
-        onPersistAgentSnapshot(sessionId, snapshot);
+        onPersistAgentSnapshot(sessionId, snapshot, documentKey);
       });
     },
-    [sessionId, onPersistAgentSnapshot],
+    [documentKey, sessionId, onPersistAgentSnapshot],
   );
 
   const transport = useMemo(
@@ -135,16 +140,33 @@ function DocumentChatSessionView({
   useEffect(() => {
     return () => {
       stop();
-      onPersistSession(sessionId, messagesRef.current);
+      onPersistSession(sessionId, messagesRef.current, documentKey);
     };
-  }, [sessionId, onPersistSession, stop]);
+  }, [documentKey, sessionId, onPersistSession, stop]);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
-      onPersistSession(sessionId, messages);
+      onPersistSession(sessionId, messages, documentKey);
     }, 500);
     return () => window.clearTimeout(t);
-  }, [messages, sessionId, onPersistSession]);
+  }, [documentKey, messages, sessionId, onPersistSession]);
+
+  useEffect(() => {
+    const flush = () => {
+      if (document.visibilityState === 'hidden') {
+        onPersistSession(sessionId, messagesRef.current, documentKey);
+      }
+    };
+    const onPageHide = () => {
+      onPersistSession(sessionId, messagesRef.current, documentKey);
+    };
+    document.addEventListener('visibilitychange', flush);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', flush);
+      window.removeEventListener('pagehide', onPageHide);
+    };
+  }, [documentKey, sessionId, onPersistSession]);
 
   useEffect(() => {
     if (!editor) return;
@@ -296,6 +318,8 @@ export function DocumentChatPanel() {
   const { editor } = useEditorSession();
 
   const [bundle, setBundle] = useState<DocumentChatBundle | null>(null);
+  /** Which `documentKey` the current `bundle` was loaded for (avoids one render of stale bundle + new key). */
+  const [bundleSourceKey, setBundleSourceKey] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [archivedChatsOpen, setArchivedChatsOpen] = useState(false);
@@ -313,6 +337,7 @@ export function DocumentChatPanel() {
     let cancelled = false;
     const api = window.scribe?.getDocumentChatBundle;
     setBundle(null);
+    setBundleSourceKey(null);
     setActiveSessionId(null);
     chatInitialMessagesRef.current = { key: '', messages: [] };
     if (!api) {
@@ -325,11 +350,13 @@ export function DocumentChatPanel() {
         if (cancelled) return;
         setBundle(b);
         setActiveSessionId(b.activeSessionId);
+        setBundleSourceKey(documentKey);
       },
       () => {
         if (cancelled) return;
         setLoadError('Could not load chat sessions.');
         setBundle(null);
+        setBundleSourceKey(null);
         setActiveSessionId(null);
       },
     );
@@ -338,10 +365,13 @@ export function DocumentChatPanel() {
     };
   }, [documentKey]);
 
+  const bundleMatchesDocument = bundleSourceKey !== null && bundleSourceKey === documentKey;
+  const effectiveBundle = bundle && bundleMatchesDocument ? bundle : null;
+
   const hydrationKey =
-    bundle && activeSessionId ? `${documentKey}::${activeSessionId}` : '';
-  if (bundle && hydrationKey && hydrationKey !== chatInitialMessagesRef.current.key) {
-    const s = bundle.sessions.find((x) => x.id === activeSessionId);
+    effectiveBundle && activeSessionId ? `${documentKey}::${activeSessionId}` : '';
+  if (effectiveBundle && hydrationKey && hydrationKey !== chatInitialMessagesRef.current.key) {
+    const s = effectiveBundle.sessions.find((x) => x.id === activeSessionId);
     chatInitialMessagesRef.current = {
       key: hydrationKey,
       messages: parseInitialMessages(s?.messages),
@@ -355,39 +385,58 @@ export function DocumentChatPanel() {
   }, [documentKey]);
 
   const persistSession = useCallback(
-    (sessionId: string, messages: DocumentChatUIMessage[]) => {
-      setBundle((prev) => {
-        if (!prev) return prev;
-        const title = chatTitleFromMessages(messages);
-        const updatedAt = Date.now();
-        const sessions = prev.sessions.map((s) =>
-          s.id === sessionId ? { ...s, messages, title, updatedAt } : s,
-        );
-        const next: DocumentChatBundle = { ...prev, sessions };
-        saveBundle(next);
-        return next;
-      });
+    (sessionId: string, messages: DocumentChatUIMessage[], persistDocumentKey: string) => {
+      const title = chatTitleFromMessages(messages);
+      const updatedAt = Date.now();
+      const mergeApi = window.scribe?.mergeDocumentChatSession;
+
+      if (persistDocumentKey === documentKey) {
+        setBundle((prev) => {
+          if (!prev) return prev;
+          const sessions = prev.sessions.map((s) =>
+            s.id === sessionId ? { ...s, messages, title, updatedAt } : s,
+          );
+          const next: DocumentChatBundle = { ...prev, sessions };
+          saveBundle(next);
+          return next;
+        });
+        return;
+      }
+
+      if (mergeApi) {
+        void mergeApi(persistDocumentKey, sessionId, { messages, title, updatedAt });
+      }
     },
-    [saveBundle],
+    [documentKey, saveBundle],
   );
 
   const persistAgentSnapshot = useCallback(
-    (sessionId: string, html: string) => {
-      setBundle((prev) => {
-        if (!prev) return prev;
-        const sessions = prev.sessions.map((s) =>
-          s.id === sessionId ? { ...s, lastAgentDocumentHtml: html } : s,
-        );
-        const next: DocumentChatBundle = { ...prev, sessions };
-        saveBundle(next);
-        return next;
-      });
+    (sessionId: string, html: string, persistDocumentKey: string) => {
+      const mergeApi = window.scribe?.mergeDocumentChatSession;
+
+      if (persistDocumentKey === documentKey) {
+        setBundle((prev) => {
+          if (!prev) return prev;
+          const sessions = prev.sessions.map((s) =>
+            s.id === sessionId ? { ...s, lastAgentDocumentHtml: html } : s,
+          );
+          const next: DocumentChatBundle = { ...prev, sessions };
+          saveBundle(next);
+          return next;
+        });
+        return;
+      }
+
+      if (mergeApi) {
+        void mergeApi(persistDocumentKey, sessionId, { lastAgentDocumentHtml: html });
+      }
     },
-    [saveBundle],
+    [documentKey, saveBundle],
   );
 
   const selectSession = useCallback(
     (id: string) => {
+      if (bundleSourceKey !== documentKey) return;
       setActiveSessionId(id);
       setBundle((prev) => {
         if (!prev) return prev;
@@ -396,10 +445,11 @@ export function DocumentChatPanel() {
         return next;
       });
     },
-    [saveBundle],
+    [bundleSourceKey, documentKey, saveBundle],
   );
 
   const newChat = useCallback(() => {
+    if (bundleSourceKey !== documentKey) return;
     const id = crypto.randomUUID();
     const now = Date.now();
     const session: StoredChatSession = {
@@ -418,11 +468,11 @@ export function DocumentChatPanel() {
       return next;
     });
     setActiveSessionId(id);
-  }, [saveBundle]);
+  }, [bundleSourceKey, documentKey, saveBundle]);
 
   const deleteActiveSession = useCallback(() => {
-    if (!bundle || !activeSessionId) return;
-    const remaining = bundle.sessions.filter((s) => s.id !== activeSessionId);
+    if (!effectiveBundle || !activeSessionId) return;
+    const remaining = effectiveBundle.sessions.filter((s) => s.id !== activeSessionId);
     if (remaining.length === 0) {
       const id = crypto.randomUUID();
       const now = Date.now();
@@ -447,11 +497,11 @@ export function DocumentChatPanel() {
     saveBundle(next);
     setBundle(next);
     setActiveSessionId(nextActive);
-  }, [bundle, activeSessionId, saveBundle]);
+  }, [effectiveBundle, activeSessionId, saveBundle]);
 
   const archiveActiveSession = useCallback(() => {
-    if (!bundle || !activeSessionId) return;
-    let sessions = bundle.sessions.map((s) =>
+    if (!effectiveBundle || !activeSessionId) return;
+    let sessions = effectiveBundle.sessions.map((s) =>
       s.id === activeSessionId ? { ...s, archived: true as const } : s,
     );
     const available = sessions.filter((s) => !s.archived);
@@ -470,27 +520,27 @@ export function DocumentChatPanel() {
     saveBundle(next);
     setBundle(next);
     setActiveSessionId(newActiveId);
-  }, [bundle, activeSessionId, saveBundle]);
+  }, [effectiveBundle, activeSessionId, saveBundle]);
 
   const unarchiveActiveSession = useCallback(() => {
-    if (!bundle || !activeSessionId) return;
-    const sessions = bundle.sessions.map((s) => {
+    if (!effectiveBundle || !activeSessionId) return;
+    const sessions = effectiveBundle.sessions.map((s) => {
       if (s.id !== activeSessionId) return s;
       if (!s.archived) return s;
       const { archived: _a, ...rest } = s;
       void _a;
       return rest;
     });
-    const next: DocumentChatBundle = { ...bundle, sessions };
+    const next: DocumentChatBundle = { ...effectiveBundle, sessions };
     saveBundle(next);
     setBundle(next);
-  }, [bundle, activeSessionId, saveBundle]);
+  }, [effectiveBundle, activeSessionId, saveBundle]);
 
   const editorReady = Boolean(editor);
 
   const activeSessionMeta =
-    bundle && activeSessionId
-      ? bundle.sessions.find((s) => s.id === activeSessionId)
+    effectiveBundle && activeSessionId
+      ? effectiveBundle.sessions.find((s) => s.id === activeSessionId)
       : undefined;
   const activeSessionArchived = activeSessionMeta?.archived === true;
 
@@ -508,16 +558,17 @@ export function DocumentChatPanel() {
           variant="outline"
           size="sm"
           className="h-8 w-full justify-start gap-1.5 px-2 text-xs"
+          disabled={!effectiveBundle}
           onClick={newChat}
         >
           <MessageSquarePlusIcon className="size-3.5 shrink-0" aria-hidden />
           New chat
         </Button>
         <div className="text-sidebar-foreground/60 min-h-0 flex-1 overflow-y-auto text-[10px] leading-snug">
-          {bundle ? (
+          {effectiveBundle ? (
             <>
               <ul className="flex flex-col gap-0.5">
-                {bundle.sessions
+                {effectiveBundle.sessions
                   .filter((s) => !s.archived)
                   .map((s) => {
                     const selected = s.id === activeSessionId;
@@ -539,7 +590,7 @@ export function DocumentChatPanel() {
                     );
                   })}
               </ul>
-              {bundle.sessions.some((s) => s.archived) ? (
+              {effectiveBundle.sessions.some((s) => s.archived) ? (
                 <Collapsible
                   open={archivedChatsOpen}
                   onOpenChange={setArchivedChatsOpen}
@@ -562,7 +613,7 @@ export function DocumentChatPanel() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <ul className="flex flex-col gap-0.5 pt-0.5">
-                      {bundle.sessions
+                      {effectiveBundle.sessions
                         .filter((s) => s.archived)
                         .map((s) => {
                           const selected = s.id === activeSessionId;
@@ -604,7 +655,7 @@ export function DocumentChatPanel() {
               {documentLabel}
             </p>
           </div>
-          {bundle && activeSessionId ? (
+          {effectiveBundle && activeSessionId ? (
             <div className="flex shrink-0 gap-0.5 pt-0.5">
               {activeSessionArchived ? (
                 <Button
@@ -650,14 +701,14 @@ export function DocumentChatPanel() {
           <p className="text-destructive text-xs">{loadError}</p>
         ) : null}
 
-        {bundle && activeSessionId ? (
+        {effectiveBundle && activeSessionId ? (
           <DocumentChatSessionView
             key={`${documentKey}::${activeSessionId}`}
             sessionId={activeSessionId}
             documentKey={documentKey}
             initialMessages={initialMessagesForView}
             initialLastAgentDocumentHtml={
-              bundle.sessions.find((s) => s.id === activeSessionId)?.lastAgentDocumentHtml
+              effectiveBundle.sessions.find((s) => s.id === activeSessionId)?.lastAgentDocumentHtml
             }
             editorReady={editorReady}
             onPersistSession={persistSession}

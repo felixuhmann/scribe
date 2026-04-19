@@ -9,7 +9,31 @@ import {
   type ReactNode,
 } from 'react';
 
+import { recordRecentDiskPath } from '@/lib/recent-disk-files';
+
 const STORAGE_KEY = 'scribe.documentKey';
+const FOLDER_STORAGE_KEY = 'scribe.openedFolderPath';
+
+/** No document open yet — show the start gate until the user opens a file. */
+export const IDLE_DOCUMENT_KEY = 'idle';
+
+/** Parent directory of an absolute file path (Windows and POSIX). */
+export function dirnameAbsolutePath(absolutePath: string): string {
+  const normalized = absolutePath.trim().replace(/[/\\]+$/, '');
+  const i = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
+  if (i <= 0) return normalized;
+  return normalized.slice(0, i) || normalized;
+}
+
+function readStoredOpenedFolderPath(): string | null {
+  try {
+    const v = sessionStorage.getItem(FOLDER_STORAGE_KEY);
+    if (v && v.trim() !== '') return v;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
 
 /** Stable workspace id for a file on disk (used for chat persistence). */
 export function documentKeyFromAbsolutePath(absolutePath: string): string {
@@ -39,6 +63,7 @@ function inferFormatFromFilename(nameOrPath: string): 'html' | 'markdown' {
  * Derived from the backing filename for `file:` and `local:` keys.
  */
 export function inferContentFormatFromDocumentKey(documentKey: string): 'html' | 'markdown' | null {
+  if (documentKey === IDLE_DOCUMENT_KEY) return null;
   const filePath = absolutePathFromDocumentKey(documentKey);
   if (filePath) {
     return inferFormatFromFilename(filePath);
@@ -53,15 +78,19 @@ export function inferContentFormatFromDocumentKey(documentKey: string): 'html' |
 function readStoredDocumentKey(): string {
   try {
     const v = sessionStorage.getItem(STORAGE_KEY);
-    if (v && v.trim() !== '') return v;
+    if (v && v.trim() !== '') {
+      if (v === 'scratch') return IDLE_DOCUMENT_KEY;
+      return v;
+    }
   } catch {
     /* ignore */
   }
-  return 'scratch';
+  return IDLE_DOCUMENT_KEY;
 }
 
 export function formatDocumentLabel(documentKey: string): string {
-  const key = documentKey.trim() || 'scratch';
+  const key = documentKey.trim() || IDLE_DOCUMENT_KEY;
+  if (key === IDLE_DOCUMENT_KEY) return '';
   if (key === 'scratch') return 'Scratch';
   if (key.startsWith('unsaved:')) return 'Untitled';
   if (key.startsWith('file:')) {
@@ -78,19 +107,28 @@ export function formatDocumentLabel(documentKey: string): string {
   return 'Document';
 }
 
+type BootstrapPayload = { documentKey: string; html: string };
+
 type DocumentWorkspaceValue = {
   documentKey: string;
   documentLabel: string;
   /** Absolute path when this document is backed by a real file (Save without dialog). */
   diskAbsolutePath: string | null;
+  /**
+   * Folder shown in the Files sidebar: parent of the last opened/saved-on-disk document,
+   * or a path persisted in session storage. Stays set when switching to an unsaved tab.
+   */
+  openedFolderAbsolutePath: string | null;
   isDirty: boolean;
   /** Call after loading/replacing editor content so “dirty” compares to this snapshot. */
   syncDocumentBaseline: (html: string) => void;
   /** Editor content changed; updates dirty vs baseline (no-op until baseline is set). */
   noteEditorHtmlChanged: (html: string) => void;
-  notifyOpenedLocalFile: (file: File) => void;
+  notifyOpenedLocalFile: (file: File, initialEditorHtml?: string | null) => void;
   /** Prefer this in Electron: stable path-based key and disk saves. */
-  notifyOpenedFromDisk: (absolutePath: string) => void;
+  notifyOpenedFromDisk: (absolutePath: string, initialEditorHtml?: string | null) => void;
+  /** HTML to inject on first editor mount (used when opening before the editor exists). */
+  getBootstrapEditorHtml: (forDocumentKey: string) => string | null;
   notifyNewBlankDocument: () => void;
   /** After Save As, point the workspace at the new path without reloading editor HTML. */
   adoptSavedFilePath: (absolutePath: string) => void;
@@ -100,7 +138,11 @@ const DocumentWorkspaceContext = createContext<DocumentWorkspaceValue | null>(nu
 
 export function DocumentWorkspaceProvider({ children }: { children: ReactNode }) {
   const [documentKey, setDocumentKey] = useState(readStoredDocumentKey);
+  const [openedFolderAbsolutePath, setOpenedFolderAbsolutePath] = useState<string | null>(
+    readStoredOpenedFolderPath,
+  );
   const savedHtmlRef = useRef<string | null>(null);
+  const bootstrapEditorRef = useRef<BootstrapPayload | null>(null);
   const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
@@ -110,6 +152,25 @@ export function DocumentWorkspaceProvider({ children }: { children: ReactNode })
       /* ignore */
     }
   }, [documentKey]);
+
+  const diskAbsolutePath = useMemo(() => absolutePathFromDocumentKey(documentKey), [documentKey]);
+
+  useEffect(() => {
+    if (!diskAbsolutePath) return;
+    recordRecentDiskPath(diskAbsolutePath);
+  }, [diskAbsolutePath]);
+
+  useEffect(() => {
+    if (!diskAbsolutePath) return;
+    const dir = dirnameAbsolutePath(diskAbsolutePath);
+    if (!dir || dir === diskAbsolutePath) return;
+    setOpenedFolderAbsolutePath(dir);
+    try {
+      sessionStorage.setItem(FOLDER_STORAGE_KEY, dir);
+    } catch {
+      /* ignore */
+    }
+  }, [diskAbsolutePath]);
 
   const syncDocumentBaseline = useCallback((html: string) => {
     savedHtmlRef.current = html;
@@ -121,45 +182,66 @@ export function DocumentWorkspaceProvider({ children }: { children: ReactNode })
     setIsDirty(html !== savedHtmlRef.current);
   }, []);
 
-  const notifyOpenedLocalFile = useCallback((file: File) => {
-    setDocumentKey(`local:${file.name}:${file.lastModified}:${file.size}`);
+  const notifyOpenedLocalFile = useCallback((file: File, initialEditorHtml?: string | null) => {
+    const key = `local:${file.name}:${file.lastModified}:${file.size}`;
+    if (initialEditorHtml != null && initialEditorHtml !== '') {
+      bootstrapEditorRef.current = { documentKey: key, html: initialEditorHtml };
+    } else {
+      bootstrapEditorRef.current = null;
+    }
+    setDocumentKey(key);
   }, []);
 
-  const notifyOpenedFromDisk = useCallback((absolutePath: string) => {
-    setDocumentKey(documentKeyFromAbsolutePath(absolutePath.trim()));
+  const notifyOpenedFromDisk = useCallback((absolutePath: string, initialEditorHtml?: string | null) => {
+    const key = documentKeyFromAbsolutePath(absolutePath.trim());
+    if (initialEditorHtml != null && initialEditorHtml !== '') {
+      bootstrapEditorRef.current = { documentKey: key, html: initialEditorHtml };
+    } else {
+      bootstrapEditorRef.current = null;
+    }
+    setDocumentKey(key);
+  }, []);
+
+  const getBootstrapEditorHtml = useCallback((forDocumentKey: string) => {
+    const b = bootstrapEditorRef.current;
+    return b && b.documentKey === forDocumentKey ? b.html : null;
   }, []);
 
   const notifyNewBlankDocument = useCallback(() => {
+    bootstrapEditorRef.current = null;
     setDocumentKey(`unsaved:${crypto.randomUUID()}`);
   }, []);
 
   const adoptSavedFilePath = useCallback((absolutePath: string) => {
+    bootstrapEditorRef.current = null;
     setDocumentKey(documentKeyFromAbsolutePath(absolutePath.trim()));
   }, []);
-
-  const diskAbsolutePath = useMemo(() => absolutePathFromDocumentKey(documentKey), [documentKey]);
 
   const value = useMemo(
     (): DocumentWorkspaceValue => ({
       documentKey,
       documentLabel: formatDocumentLabel(documentKey),
       diskAbsolutePath,
+      openedFolderAbsolutePath,
       isDirty,
       syncDocumentBaseline,
       noteEditorHtmlChanged,
       notifyOpenedLocalFile,
       notifyOpenedFromDisk,
+      getBootstrapEditorHtml,
       notifyNewBlankDocument,
       adoptSavedFilePath,
     }),
     [
       documentKey,
       diskAbsolutePath,
+      openedFolderAbsolutePath,
       isDirty,
       syncDocumentBaseline,
       noteEditorHtmlChanged,
       notifyOpenedLocalFile,
       notifyOpenedFromDisk,
+      getBootstrapEditorHtml,
       notifyNewBlankDocument,
       adoptSavedFilePath,
     ],

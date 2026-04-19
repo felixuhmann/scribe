@@ -88,5 +88,8 @@ typings/
 # Vite
 .vite/
 
+# Web / app build output
+dist/
+
 # Electron-Forge
 out/

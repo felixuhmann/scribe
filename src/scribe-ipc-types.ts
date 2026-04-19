@@ -53,9 +53,26 @@ export type DocumentChatBundle = {
   sessions: StoredChatSession[];
 };
 
+/** Partial update for one chat session (disk merge from renderer, e.g. unmount while another doc is open). */
+export type DocumentChatSessionMergePatch = {
+  messages?: unknown[];
+  title?: string;
+  updatedAt?: number;
+  lastAgentDocumentHtml?: string;
+};
+
 export type OpenDocumentResult =
   | { ok: true; path: string; name: string; text: string; format: 'html' | 'markdown' }
   | { ok: false; cancelled?: true; error?: string };
+
+/** Recursive tree of folders (only if they contain supported files) and supported document files. */
+export type ExplorerFolderEntry =
+  | { kind: 'dir'; name: string; path: string; children: ExplorerFolderEntry[] }
+  | { kind: 'file'; name: string; path: string };
+
+export type ListExplorerFolderResult =
+  | { ok: true; rootPath: string; entries: ExplorerFolderEntry[] }
+  | { ok: false; error: string };
 
 export type SaveHtmlToPathResult = { ok: true } | { ok: false; error: string };
 

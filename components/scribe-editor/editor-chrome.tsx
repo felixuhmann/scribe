@@ -13,7 +13,11 @@ import { SettingsDialog } from './settings-dialog';
 import { useEditorChromeState } from './use-editor-chrome-state';
 
 export function ScribeEditorChrome() {
-  const { notifySettingsSaved, registerOpenLinkDialogHandler } = useEditorSession();
+  const {
+    notifySettingsSaved,
+    registerOpenLinkDialogHandler,
+    registerOpenDocumentFromDiskHandler,
+  } = useEditorSession();
   const chrome = useEditorChromeState();
   const { mod, ...toolChrome } = chrome;
   const { editor } = toolChrome;
@@ -245,6 +249,20 @@ export function ScribeEditorChrome() {
   useEffect(() => {
     return registerOpenLinkDialogHandler(() => setLinkOpen(true));
   }, [registerOpenLinkDialogHandler]);
+
+  useEffect(() => {
+    return registerOpenDocumentFromDiskHandler(async (absolutePath: string) => {
+      if (!editor) return;
+      const api = window.scribe?.openDocumentAtPath;
+      if (!api) return;
+      const result = await api(absolutePath);
+      if (!result.ok) return;
+      notifyOpenedFromDisk(result.path);
+      const html =
+        result.format === 'markdown' ? markdownToEditorHtml(result.text) : result.text;
+      editor.chain().focus().setContent(html, { emitUpdate: true }).run();
+    });
+  }, [editor, notifyOpenedFromDisk, registerOpenDocumentFromDiskHandler]);
 
   useEffect(() => {
     if (!editor) return;

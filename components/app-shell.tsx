@@ -4,8 +4,10 @@ import type { CSSProperties } from 'react';
 import { useCallback, useRef, useState } from 'react';
 
 import { AppSidebar } from '@/components/app-sidebar';
+import { IDLE_DOCUMENT_KEY, useDocumentWorkspace } from '@/components/document-workspace-context';
 import { ScribeEditor } from '@/components/scribe-editor';
 import { ScribeEditorChrome } from '@/components/scribe-editor/editor-chrome';
+import { StartWorkspaceScreen } from '@/components/start-workspace-screen';
 import { SidebarInset, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 
@@ -111,6 +113,15 @@ function DesktopSplit({
 
 export function AppShell() {
   const [sidebarWidthPx, setSidebarWidthPx] = useState(DEFAULT_SIDEBAR_WIDTH_PX);
+  const { documentKey } = useDocumentWorkspace();
+
+  if (documentKey === IDLE_DOCUMENT_KEY) {
+    return (
+      <SidebarProvider className="flex h-full min-h-0 w-full flex-col">
+        <StartWorkspaceScreen />
+      </SidebarProvider>
+    );
+  }
 
   return (
     <SidebarProvider

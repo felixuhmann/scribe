@@ -1,6 +1,8 @@
 import type {
   DocumentChatBundle,
+  DocumentChatSessionMergePatch,
   ExportPdfResult,
+  ListExplorerFolderResult,
   OpenDocumentResult,
   SaveHtmlAsResult,
   SaveHtmlToPathResult,
@@ -21,7 +23,14 @@ declare global {
       setSettings: (patch: ScribeSetSettingsInput) => Promise<ScribeSettingsPublic>;
       getDocumentChatBundle: (documentKey: string) => Promise<DocumentChatBundle>;
       saveDocumentChatBundle: (documentKey: string, bundle: DocumentChatBundle) => Promise<void>;
+      mergeDocumentChatSession: (
+        documentKey: string,
+        sessionId: string,
+        patch: DocumentChatSessionMergePatch,
+      ) => Promise<void>;
       openDocument: () => Promise<OpenDocumentResult>;
+      openDocumentAtPath: (filePath: string) => Promise<OpenDocumentResult>;
+      listExplorerFolder: (rootPath: string) => Promise<ListExplorerFolderResult>;
       saveHtmlToPath: (filePath: string, htmlBody: string) => Promise<SaveHtmlToPathResult>;
       saveHtmlAs: (input: { htmlBody: string; defaultPath?: string }) => Promise<SaveHtmlAsResult>;
       saveMarkdownToPath: (filePath: string, markdown: string) => Promise<SaveMarkdownToPathResult>;

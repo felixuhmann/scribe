@@ -2,7 +2,9 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 import type {
   DocumentChatBundle,
+  DocumentChatSessionMergePatch,
   ExportPdfResult,
+  ListExplorerFolderResult,
   OpenDocumentResult,
   SaveHtmlAsResult,
   SaveHtmlToPathResult,
@@ -23,7 +25,17 @@ contextBridge.exposeInMainWorld('scribe', {
     ipcRenderer.invoke('scribe:getDocumentChatBundle', documentKey),
   saveDocumentChatBundle: (documentKey: string, bundle: DocumentChatBundle): Promise<void> =>
     ipcRenderer.invoke('scribe:saveDocumentChatBundle', { documentKey, bundle }),
+  mergeDocumentChatSession: (
+    documentKey: string,
+    sessionId: string,
+    patch: DocumentChatSessionMergePatch,
+  ): Promise<void> =>
+    ipcRenderer.invoke('scribe:mergeDocumentChatSession', { documentKey, sessionId, patch }),
   openDocument: (): Promise<OpenDocumentResult> => ipcRenderer.invoke('scribe:openDocument'),
+  openDocumentAtPath: (filePath: string): Promise<OpenDocumentResult> =>
+    ipcRenderer.invoke('scribe:openDocumentAtPath', { path: filePath }),
+  listExplorerFolder: (rootPath: string): Promise<ListExplorerFolderResult> =>
+    ipcRenderer.invoke('scribe:listExplorerFolder', { rootPath }),
   saveHtmlToPath: (filePath: string, htmlBody: string): Promise<SaveHtmlToPathResult> =>
     ipcRenderer.invoke('scribe:saveHtmlToPath', { path: filePath, htmlBody }),
   saveHtmlAs: (input: { htmlBody: string; defaultPath?: string }): Promise<SaveHtmlAsResult> =>

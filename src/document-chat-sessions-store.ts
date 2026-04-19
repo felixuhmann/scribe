@@ -3,12 +3,28 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-import type { DocumentChatBundle, StoredChatSession } from './scribe-ipc-types';
+import type {
+  DocumentChatBundle,
+  DocumentChatSessionMergePatch,
+  StoredChatSession,
+} from './scribe-ipc-types';
 
 const FILE_NAME = 'scribe-document-chats.json';
 
 function storePath(): string {
   return path.join(app.getPath('userData'), FILE_NAME);
+}
+
+/** Serialize all JSON store reads/writes so concurrent IPC cannot drop updates. */
+let storeChain: Promise<unknown> = Promise.resolve();
+
+function withStoreLock<T>(fn: () => Promise<T>): Promise<T> {
+  const next = storeChain.then(() => fn());
+  storeChain = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  return next;
 }
 
 function defaultSession(): StoredChatSession {
@@ -69,8 +85,17 @@ type DocumentChatStoreFile = {
 };
 
 async function readFile(): Promise<DocumentChatStoreFile> {
+  let raw: string;
   try {
-    const raw = await fs.readFile(storePath(), 'utf8');
+    raw = await fs.readFile(storePath(), 'utf8');
+  } catch (e) {
+    const err = e as NodeJS.ErrnoException;
+    if (err.code === 'ENOENT') {
+      return { version: 1, documents: {} };
+    }
+    throw e;
+  }
+  try {
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== 'object') {
       return { version: 1, documents: {} };
@@ -81,34 +106,110 @@ async function readFile(): Promise<DocumentChatStoreFile> {
     }
     return { version: 1, documents: p.documents as Record<string, DocumentChatBundle> };
   } catch {
+    try {
+      const corruptPath = `${storePath()}.corrupt.${Date.now()}.json`;
+      await fs.rename(storePath(), corruptPath);
+    } catch {
+      /* ignore backup failure */
+    }
     return { version: 1, documents: {} };
   }
 }
 
-export async function getDocumentChatBundle(documentKey: string): Promise<DocumentChatBundle> {
-  const key = documentKey.trim() || 'scratch';
-  const file = await readFile();
-  const existing = file.documents[key];
-  if (!existing) {
-    const s = defaultSession();
-    const bundle: DocumentChatBundle = { activeSessionId: s.id, sessions: [s] };
-    file.documents[key] = bundle;
-    await writeFile(file);
-    return bundle;
+function applySessionPatch(s: StoredChatSession, patch: DocumentChatSessionMergePatch): StoredChatSession {
+  const next: StoredChatSession = { ...s };
+  if (patch.messages !== undefined) next.messages = patch.messages;
+  if (patch.title !== undefined) next.title = patch.title;
+  if (patch.updatedAt !== undefined) next.updatedAt = patch.updatedAt;
+  if (patch.lastAgentDocumentHtml !== undefined) {
+    next.lastAgentDocumentHtml = patch.lastAgentDocumentHtml;
   }
-  return normalizeBundle(existing);
+  return next;
+}
+
+export async function getDocumentChatBundle(documentKey: string): Promise<DocumentChatBundle> {
+  return withStoreLock(async () => {
+    const key = documentKey.trim() || 'idle';
+    const file = await readFile();
+    const existing = file.documents[key];
+    if (!existing) {
+      const s = defaultSession();
+      const bundle: DocumentChatBundle = { activeSessionId: s.id, sessions: [s] };
+      file.documents[key] = bundle;
+      await writeFile(file);
+      return bundle;
+    }
+    return normalizeBundle(existing);
+  });
 }
 
 export async function saveDocumentChatBundle(documentKey: string, bundle: DocumentChatBundle): Promise<void> {
-  const key = documentKey.trim() || 'scratch';
-  const normalized = normalizeBundle(bundle);
-  const file = await readFile();
-  file.documents[key] = normalized;
-  await writeFile(file);
+  return withStoreLock(async () => {
+    const key = documentKey.trim() || 'idle';
+    const normalized = normalizeBundle(bundle);
+    const file = await readFile();
+    file.documents[key] = normalized;
+    await writeFile(file);
+  });
+}
+
+export async function mergeDocumentChatSession(
+  documentKey: string,
+  sessionId: string,
+  patch: DocumentChatSessionMergePatch,
+): Promise<void> {
+  return withStoreLock(async () => {
+    const key = documentKey.trim() || 'idle';
+    const file = await readFile();
+    const rawBundle = file.documents[key];
+    let norm: DocumentChatBundle;
+
+    if (!rawBundle) {
+      const now = Date.now();
+      const messages = patch.messages !== undefined ? patch.messages : [];
+      const title = patch.title?.trim() ? patch.title.trim() : 'New chat';
+      const updatedAt = patch.updatedAt ?? now;
+      const session: StoredChatSession = {
+        id: sessionId,
+        title,
+        messages,
+        updatedAt,
+        ...(patch.lastAgentDocumentHtml !== undefined
+          ? { lastAgentDocumentHtml: patch.lastAgentDocumentHtml }
+          : {}),
+      };
+      norm = { activeSessionId: sessionId, sessions: [session] };
+    } else {
+      norm = normalizeBundle(rawBundle);
+      const idx = norm.sessions.findIndex((s) => s.id === sessionId);
+      if (idx === -1) {
+        const now = Date.now();
+        const session: StoredChatSession = {
+          id: sessionId,
+          title: patch.title?.trim() ? patch.title.trim() : 'New chat',
+          messages: patch.messages !== undefined ? patch.messages : [],
+          updatedAt: patch.updatedAt ?? now,
+          ...(patch.lastAgentDocumentHtml !== undefined
+            ? { lastAgentDocumentHtml: patch.lastAgentDocumentHtml }
+            : {}),
+        };
+        norm = { ...norm, sessions: [...norm.sessions, session] };
+      } else {
+        const sessions = norm.sessions.map((s) =>
+          s.id === sessionId ? applySessionPatch(s, patch) : s,
+        );
+        norm = { ...norm, sessions };
+      }
+    }
+
+    file.documents[key] = norm;
+    await writeFile(file);
+  });
 }
 
 async function writeFile(data: DocumentChatStoreFile): Promise<void> {
-  const dir = path.dirname(storePath());
+  const p = storePath();
+  const dir = path.dirname(p);
   await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(storePath(), `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+  await fs.writeFile(p, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
 }

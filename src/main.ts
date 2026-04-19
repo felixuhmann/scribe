@@ -7,7 +7,10 @@ import started from 'electron-squirrel-startup';
 import { runAutocomplete } from './autocomplete-agent';
 import type {
   DocumentChatBundle,
+  DocumentChatSessionMergePatch,
+  ExplorerFolderEntry,
   ExportPdfResult,
+  ListExplorerFolderResult,
   OpenDocumentResult,
   SaveHtmlAsResult,
   SaveHtmlToPathResult,
@@ -21,7 +24,11 @@ import {
   readStoredSettings,
   resolveOpenAiApiKey,
 } from './settings-store';
-import { getDocumentChatBundle, saveDocumentChatBundle } from './document-chat-sessions-store';
+import {
+  getDocumentChatBundle,
+  mergeDocumentChatSession,
+  saveDocumentChatBundle,
+} from './document-chat-sessions-store';
 import { abortDocumentChatSession, runDocumentChatSession } from './document-chat-ipc';
 
 config({ path: path.resolve(process.cwd(), '.env') });
@@ -55,6 +62,16 @@ ipcMain.handle(
   },
 );
 
+ipcMain.handle(
+  'scribe:mergeDocumentChatSession',
+  async (
+    _event,
+    payload: { documentKey: string; sessionId: string; patch: DocumentChatSessionMergePatch },
+  ) => {
+    await mergeDocumentChatSession(payload.documentKey, payload.sessionId, payload.patch);
+  },
+);
+
 function wrapHtmlDocument(innerBodyHtml: string): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Document</title></head><body>${innerBodyHtml}</body></html>`;
 }
@@ -65,6 +82,56 @@ function inferOpenFormat(filePath: string): 'html' | 'markdown' {
     return 'markdown';
   }
   return 'html';
+}
+
+async function readOpenableDocumentFromResolvedPath(resolvedFilePath: string): Promise<OpenDocumentResult> {
+  try {
+    const text = await fs.readFile(resolvedFilePath, 'utf8');
+    const name = path.basename(resolvedFilePath);
+    const format = inferOpenFormat(resolvedFilePath);
+    return { ok: true, path: resolvedFilePath, name, text, format };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Could not read file';
+    return { ok: false, error: message };
+  }
+}
+
+const EXPLORER_SKIP_DIRS = new Set(['node_modules', '.git']);
+
+function isSupportedExplorerFile(name: string): boolean {
+  const lower = name.toLowerCase();
+  return (
+    lower.endsWith('.html') ||
+    lower.endsWith('.htm') ||
+    lower.endsWith('.txt') ||
+    lower.endsWith('.md') ||
+    lower.endsWith('.markdown')
+  );
+}
+
+async function listExplorerFolderEntries(absRoot: string): Promise<ExplorerFolderEntry[]> {
+  let dirents;
+  try {
+    dirents = await fs.readdir(absRoot, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const out: ExplorerFolderEntry[] = [];
+  const sorted = dirents.sort((a, b) => a.name.localeCompare(b.name));
+  for (const d of sorted) {
+    if (d.name.startsWith('.')) continue;
+    const full = path.join(absRoot, d.name);
+    if (d.isDirectory()) {
+      if (EXPLORER_SKIP_DIRS.has(d.name)) continue;
+      const children = await listExplorerFolderEntries(full);
+      if (children.length > 0) {
+        out.push({ kind: 'dir', name: d.name, path: full, children });
+      }
+    } else if (d.isFile() && isSupportedExplorerFile(d.name)) {
+      out.push({ kind: 'file', name: d.name, path: full });
+    }
+  }
+  return out;
 }
 
 function wrapHtmlForPdf(innerBodyHtml: string): string {
@@ -116,16 +183,48 @@ ipcMain.handle('scribe:openDocument', async (event): Promise<OpenDocumentResult>
     return { ok: false, cancelled: true };
   }
   const filePath = path.resolve(filePaths[0]);
-  try {
-    const text = await fs.readFile(filePath, 'utf8');
-    const name = path.basename(filePath);
-    const format = inferOpenFormat(filePath);
-    return { ok: true, path: filePath, name, text, format };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Could not read file';
-    return { ok: false, error: message };
-  }
+  return readOpenableDocumentFromResolvedPath(filePath);
 });
+
+ipcMain.handle(
+  'scribe:openDocumentAtPath',
+  async (_event, payload: { path: string }): Promise<OpenDocumentResult> => {
+    const filePath = path.resolve(payload.path);
+    try {
+      const st = await fs.stat(filePath);
+      if (!st.isFile()) {
+        return { ok: false, error: 'Not a file' };
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not read file';
+      return { ok: false, error: message };
+    }
+    return readOpenableDocumentFromResolvedPath(filePath);
+  },
+);
+
+ipcMain.handle(
+  'scribe:listExplorerFolder',
+  async (_event, payload: { rootPath: string }): Promise<ListExplorerFolderResult> => {
+    const rootPath = path.resolve(payload.rootPath);
+    try {
+      const st = await fs.stat(rootPath);
+      if (!st.isDirectory()) {
+        return { ok: false, error: 'Not a directory' };
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Folder not found';
+      return { ok: false, error: message };
+    }
+    try {
+      const entries = await listExplorerFolderEntries(rootPath);
+      return { ok: true, rootPath, entries };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not read folder';
+      return { ok: false, error: message };
+    }
+  },
+);
 
 ipcMain.handle(
   'scribe:saveHtmlToPath',

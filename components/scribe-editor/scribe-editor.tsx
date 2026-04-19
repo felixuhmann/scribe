@@ -1,7 +1,8 @@
 import type { Editor } from '@tiptap/core';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { Tiptap, useEditor } from '@tiptap/react';
 
+import { useDocumentWorkspace } from '@/components/document-workspace-context';
 import { useEditorSession } from '@/components/editor-session-context';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { TabAutocomplete } from '@/lib/tiptap-tab-autocomplete-extension';
@@ -33,6 +34,7 @@ export function ScribeEditor() {
 }
 
 function ScribeEditorInner({ editor }: { editor: Editor }) {
+  const { documentKey, getBootstrapEditorHtml, syncDocumentBaseline } = useDocumentWorkspace();
   const { setEditor, registerSettingsSavedHandler, requestOpenLinkDialog } = useEditorSession();
   const chrome = useEditorChromeState();
   const formattingChrome = ((ctx: typeof chrome) => {
@@ -90,6 +92,13 @@ function ScribeEditorInner({ editor }: { editor: Editor }) {
   }, [tabAutocomplete.enabled]);
 
   useEditorTabAutocomplete(editor, tabAutocomplete);
+
+  useLayoutEffect(() => {
+    const html = getBootstrapEditorHtml(documentKey);
+    if (!html) return;
+    editor.chain().focus().setContent(html, { emitUpdate: false }).run();
+    syncDocumentBaseline(editor.getHTML());
+  }, [documentKey, editor, getBootstrapEditorHtml, syncDocumentBaseline]);
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

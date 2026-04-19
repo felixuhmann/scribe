@@ -19,6 +19,14 @@ type EditorSessionValue = {
   /** Open the insert-link dialog (handled in app chrome). */
   requestOpenLinkDialog: () => void;
   registerOpenLinkDialogHandler: (handler: () => void) => () => void;
+  /**
+   * Load a document from an absolute path (Electron). Implemented in editor chrome
+   * so the same parsing and editor updates apply as for File → Open.
+   */
+  requestOpenDocumentFromDisk: (absolutePath: string) => Promise<void>;
+  registerOpenDocumentFromDiskHandler: (
+    handler: (absolutePath: string) => void | Promise<void>,
+  ) => () => void;
 };
 
 const EditorSessionContext = createContext<EditorSessionValue | null>(null);
@@ -27,6 +35,9 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
   const [editor, setEditorState] = useState<Editor | null>(null);
   const settingsSavedHandlerRef = useRef<(() => void) | null>(null);
   const openLinkDialogHandlerRef = useRef<(() => void) | null>(null);
+  const openDocumentFromDiskHandlerRef = useRef<
+    ((absolutePath: string) => void | Promise<void>) | null
+  >(null);
 
   const setEditor = useCallback((next: Editor | null) => {
     setEditorState(next);
@@ -58,6 +69,22 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
     openLinkDialogHandlerRef.current?.();
   }, []);
 
+  const registerOpenDocumentFromDiskHandler = useCallback(
+    (handler: (absolutePath: string) => void | Promise<void>) => {
+      openDocumentFromDiskHandlerRef.current = handler;
+      return () => {
+        if (openDocumentFromDiskHandlerRef.current === handler) {
+          openDocumentFromDiskHandlerRef.current = null;
+        }
+      };
+    },
+    [],
+  );
+
+  const requestOpenDocumentFromDisk = useCallback(async (absolutePath: string) => {
+    await openDocumentFromDiskHandlerRef.current?.(absolutePath);
+  }, []);
+
   const value = useMemo(
     () => ({
       editor,
@@ -66,6 +93,8 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
       registerSettingsSavedHandler,
       requestOpenLinkDialog,
       registerOpenLinkDialogHandler,
+      requestOpenDocumentFromDisk,
+      registerOpenDocumentFromDiskHandler,
     }),
     [
       editor,
@@ -74,6 +103,8 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
       registerSettingsSavedHandler,
       requestOpenLinkDialog,
       registerOpenLinkDialogHandler,
+      requestOpenDocumentFromDisk,
+      registerOpenDocumentFromDiskHandler,
     ],
   );
 
