@@ -121,8 +121,21 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    height: 100%;
+  }
   body {
     @apply bg-background text-foreground;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+  }
+  #root {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
   }
 }
 
@@ -130,30 +143,6 @@
 .scribe-editor-content .ProseMirror {
   min-height: 100%;
   outline: none;
-}
-
-.scribe-editor-content .ProseMirror p {
-  margin: 0.35em 0;
-}
-
-.scribe-editor-content .ProseMirror h1,
-.scribe-editor-content .ProseMirror h2,
-.scribe-editor-content .ProseMirror h3 {
-  font-weight: 600;
-  line-height: 1.25;
-  margin: 0.75em 0 0.35em;
-}
-
-.scribe-editor-content .ProseMirror h1 {
-  font-size: 1.5rem;
-}
-
-.scribe-editor-content .ProseMirror h2 {
-  font-size: 1.25rem;
-}
-
-.scribe-editor-content .ProseMirror h3 {
-  font-size: 1.1rem;
 }
 
 .scribe-editor-content .ProseMirror ul,
@@ -187,4 +176,128 @@
   padding-left: 1rem;
   border-left: 3px solid var(--border);
   color: var(--muted-foreground);
+}
+
+/* Word-like “pages” layout (visual only — no Pro pagination) */
+.scribe-editor-desk {
+  --scribe-desk: oklch(0.93 0.004 264);
+  --scribe-paper-shadow: 0 1px 2px oklch(0 0 0 / 6%), 0 4px 14px oklch(0 0 0 / 8%),
+    0 0 0 1px oklch(0 0 0 / 5%);
+  --scribe-stack: 0 20px 0 -8px oklch(0.96 0.002 264), 0 20px 10px -8px oklch(0 0 0 / 10%),
+    0 40px 0 -16px oklch(0.94 0.003 264), 0 40px 14px -16px oklch(0 0 0 / 6%);
+  background: var(--scribe-desk);
+  padding: 1rem clamp(0.5rem, 2vw, 1.5rem) 1.75rem;
+}
+
+.dark .scribe-editor-desk {
+  --scribe-desk: oklch(0.22 0.01 264);
+  --scribe-paper-shadow: 0 1px 2px oklch(0 0 0 / 35%), 0 6px 20px oklch(0 0 0 / 45%),
+    0 0 0 1px oklch(1 0 0 / 8%);
+  --scribe-stack: 0 20px 0 -8px oklch(0.26 0.01 264), 0 20px 12px -8px oklch(0 0 0 / 55%),
+    0 40px 0 -16px oklch(0.24 0.01 264), 0 40px 16px -16px oklch(0 0 0 / 35%);
+}
+
+.scribe-editor-paper {
+  width: 100%;
+  max-width: 210mm;
+  margin-inline: auto;
+  min-height: 297mm;
+  box-sizing: border-box;
+  padding: 25mm 25mm 28mm;
+  background: oklch(1 0 0);
+  color: oklch(0.2 0.02 264);
+  border-radius: 1px;
+  box-shadow: var(--scribe-paper-shadow), var(--scribe-stack);
+}
+
+.dark .scribe-editor-paper {
+  background: oklch(0.985 0.002 264);
+  color: oklch(0.16 0.02 264);
+}
+
+.scribe-editor-content .ProseMirror {
+  font-family: Calibri, 'Carlito', 'Segoe UI', system-ui, sans-serif;
+  font-size: 11pt;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+}
+
+.scribe-editor-content .ProseMirror p {
+  margin: 0 0 0.5em;
+}
+
+.scribe-editor-content .ProseMirror h1,
+.scribe-editor-content .ProseMirror h2,
+.scribe-editor-content .ProseMirror h3 {
+  font-family: Calibri, 'Carlito', 'Segoe UI', system-ui, sans-serif;
+  font-weight: 600;
+  line-height: 1.08;
+  margin: 0.5em 0 0.25em;
+}
+
+.scribe-editor-content .ProseMirror h1 {
+  font-size: 16pt;
+}
+
+.scribe-editor-content .ProseMirror h2 {
+  font-size: 14pt;
+}
+
+.scribe-editor-content .ProseMirror h3 {
+  font-size: 12pt;
+}
+
+/* Horizontal rule ≈ manual page break hint (StarterKit) */
+.scribe-editor-content .ProseMirror hr {
+  margin: 1.75rem 0;
+  padding: 0;
+  border: none;
+  border-top: 1px dotted oklch(0.65 0.02 264);
+  height: 0;
+  background: none;
+}
+
+.scribe-editor-content .ProseMirror hr.ProseMirror-selectednode,
+.scribe-editor-content .ProseMirror hr:hover {
+  border-top-color: oklch(0.5 0.05 264);
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .scribe-editor-desk,
+  .scribe-editor-desk * {
+    visibility: visible;
+  }
+
+  .scribe-editor-desk {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    background: white;
+    overflow: visible;
+  }
+
+  .scribe-editor-paper {
+    max-width: none;
+    min-height: 0;
+    margin: 0;
+    padding: 20mm;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  @page {
+    size: a4;
+    margin: 20mm;
+  }
+
+  .scribe-editor-content .ProseMirror hr {
+    break-after: page;
+    border: none;
+    height: 0;
+    margin: 0;
+  }
 }
