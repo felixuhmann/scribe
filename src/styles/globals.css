@@ -178,6 +178,13 @@
   color: var(--muted-foreground);
 }
 
+.scribe-editor-content .ProseMirror a.scribe-editor-link {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
 /* Word-like “pages” layout (visual only — no Pro pagination) */
 .scribe-editor-desk {
   --scribe-desk: oklch(0.93 0.004 264);
