@@ -1,6 +1,6 @@
 # Scribe
 
-<img width="2553" height="1378" alt="image" src="https://github.com/user-attachments/assets/be1dbec4-403d-44ca-90bc-fcfaa887516e" />
+<img alt="image" src="https://github.com/user-attachments/assets/be1dbec4-403d-44ca-90bc-fcfaa887516e" />
 
 
 Scribe is an **AI-first desktop writing app** built with [Electron](https://www.electronjs.org/). You work on real **Markdown and HTML files** on disk, but the product is designed around **writing with models**: inline continuation as you type, and a **document-aware chat** that helps you draft, revise, and think alongside your file.
