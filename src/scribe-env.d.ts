@@ -9,6 +9,7 @@ import type {
   SaveMarkdownAsResult,
   SaveMarkdownToPathResult,
   ScribeAutocompleteResult,
+  ScribeQuickEditResult,
   ScribeSetSettingsInput,
   ScribeSettingsPublic,
 } from './scribe-ipc-types';
@@ -19,6 +20,10 @@ declare global {
   interface Window {
     scribe?: {
       autocompleteSuggest: (input: { before: string; after: string }) => Promise<ScribeAutocompleteResult>;
+      quickEditSelection: (input: {
+        selectedText: string;
+        instruction: string;
+      }) => Promise<ScribeQuickEditResult>;
       getSettings: () => Promise<ScribeSettingsPublic>;
       setSettings: (patch: ScribeSetSettingsInput) => Promise<ScribeSettingsPublic>;
       getDocumentChatBundle: (documentKey: string) => Promise<DocumentChatBundle>;

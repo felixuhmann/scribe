@@ -11,6 +11,7 @@ import type {
   SaveMarkdownAsResult,
   SaveMarkdownToPathResult,
   ScribeAutocompleteResult,
+  ScribeQuickEditResult,
   ScribeSetSettingsInput,
   ScribeSettingsPublic,
 } from './scribe-ipc-types';
@@ -18,6 +19,10 @@ import type {
 contextBridge.exposeInMainWorld('scribe', {
   autocompleteSuggest: (input: { before: string; after: string }): Promise<ScribeAutocompleteResult> =>
     ipcRenderer.invoke('scribe:autocomplete', input),
+  quickEditSelection: (input: {
+    selectedText: string;
+    instruction: string;
+  }): Promise<ScribeQuickEditResult> => ipcRenderer.invoke('scribe:quickEditSelection', input),
   getSettings: (): Promise<ScribeSettingsPublic> => ipcRenderer.invoke('scribe:getSettings'),
   setSettings: (patch: ScribeSetSettingsInput): Promise<ScribeSettingsPublic> =>
     ipcRenderer.invoke('scribe:setSettings', patch),

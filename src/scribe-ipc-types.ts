@@ -3,6 +3,11 @@ export type ScribeAutocompleteResult =
   | { ok: false; error: string }
   | { ok: false; cancelled: true };
 
+export type ScribeQuickEditResult =
+  | { ok: true; text: string }
+  | { ok: false; error: string }
+  | { ok: false; cancelled: true };
+
 /** Persisted in the main process (includes secrets). */
 export type ScribeStoredSettings = {
   openaiApiKey?: string;

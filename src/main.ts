@@ -5,6 +5,7 @@ import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
 import { runAutocomplete } from './autocomplete-agent';
+import { runQuickEditSelection } from './quick-edit-selection-agent';
 import type {
   DocumentChatBundle,
   DocumentChatSessionMergePatch,
@@ -39,6 +40,7 @@ if (started) {
 }
 
 let autocompleteAbort: AbortController | null = null;
+let quickEditAbort: AbortController | null = null;
 
 ipcMain.handle('scribe:getSettings', async () => {
   const stored = await readStoredSettings();
@@ -370,6 +372,57 @@ ipcMain.on('scribe:documentChat:abort', (_event, payload: { id: string }) => {
 });
 
 ipcMain.handle(
+  'scribe:quickEditSelection',
+  async (_event, payload: { selectedText: string; instruction: string }) => {
+    quickEditAbort?.abort();
+    quickEditAbort = new AbortController();
+    const { signal } = quickEditAbort;
+    const stored = await readStoredSettings();
+    const apiKey = resolveOpenAiApiKey(stored);
+    if (!apiKey) {
+      return {
+        ok: false as const,
+        error:
+          'No OpenAI API key found. Add OPENAI_API_KEY to a .env file, or set a key in Settings.',
+      };
+    }
+    const trimmedInstruction = payload.instruction.trim();
+    if (!trimmedInstruction) {
+      return { ok: false as const, error: 'Describe what you want to change.' };
+    }
+    const selectedText = payload.selectedText;
+    if (!selectedText.trim()) {
+      return { ok: false as const, error: 'Select some text to edit.' };
+    }
+    const maxOutputTokens = Math.min(
+      4096,
+      Math.max(256, stored.autocompleteMaxOutputTokens * 8),
+    );
+    try {
+      const text = await runQuickEditSelection(
+        apiKey,
+        { selectedText, instruction: trimmedInstruction },
+        {
+          model: stored.model,
+          maxOutputTokens,
+        },
+        signal,
+      );
+      if (signal.aborted) {
+        return { ok: false as const, cancelled: true as const };
+      }
+      return { ok: true as const, text };
+    } catch (err) {
+      if (signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
+        return { ok: false as const, cancelled: true as const };
+      }
+      const message = err instanceof Error ? err.message : 'Quick edit failed';
+      return { ok: false as const, error: message };
+    }
+  },
+);
+
+ipcMain.handle(
   'scribe:autocomplete',
   async (_event, payload: { before: string; after: string }) => {
     autocompleteAbort?.abort();
@@ -415,8 +468,8 @@ ipcMain.handle(
 const createWindow = () => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1920,
+    height: 1080,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -432,9 +485,6 @@ const createWindow = () => {
       path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
     );
   }
-
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools();
 };
 
 // This method will be called when Electron has finished
