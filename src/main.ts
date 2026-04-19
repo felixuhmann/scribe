@@ -1,11 +1,47 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
+import { config } from 'dotenv';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
+
+import { runAutocomplete } from './autocomplete-agent';
+
+config({ path: path.resolve(process.cwd(), '.env') });
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
   app.quit();
 }
+
+let autocompleteAbort: AbortController | null = null;
+
+ipcMain.handle(
+  'scribe:autocomplete',
+  async (_event, payload: { before: string; after: string }) => {
+    autocompleteAbort?.abort();
+    autocompleteAbort = new AbortController();
+    const { signal } = autocompleteAbort;
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return {
+        ok: false as const,
+        error: 'Missing OPENAI_API_KEY. Add it to a .env file at the project root.',
+      };
+    }
+    try {
+      const text = await runAutocomplete(apiKey, payload, signal);
+      if (signal.aborted) {
+        return { ok: false as const, cancelled: true as const };
+      }
+      return { ok: true as const, text };
+    } catch (err) {
+      if (signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
+        return { ok: false as const, cancelled: true as const };
+      }
+      const message = err instanceof Error ? err.message : 'Autocomplete failed';
+      return { ok: false as const, error: message };
+    }
+  },
+);
 
 const createWindow = () => {
   // Create the browser window.
@@ -14,6 +50,8 @@ const createWindow = () => {
     height: 600,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
     },
   });
 

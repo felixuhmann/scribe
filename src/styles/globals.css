@@ -145,6 +145,14 @@
   outline: none;
 }
 
+.scribe-editor-content .ProseMirror .scribe-tab-autocomplete-ghost {
+  color: var(--muted-foreground);
+  opacity: 0.72;
+  pointer-events: none;
+  user-select: none;
+  white-space: pre-wrap;
+}
+
 .scribe-editor-content .ProseMirror ul,
 .scribe-editor-content .ProseMirror ol {
   margin: 0.35em 0;
