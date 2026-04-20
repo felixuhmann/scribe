@@ -50,6 +50,7 @@
     "vite": "^5.4.21"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.71",
     "@ai-sdk/openai": "^3.0.53",
     "@ai-sdk/react": "^3.0.170",
     "@tailwindcss/vite": "^4.2.2",

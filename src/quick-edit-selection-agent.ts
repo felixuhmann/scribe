@@ -1,17 +1,13 @@
-import { createOpenAI } from '@ai-sdk/openai';
 import { generateText } from 'ai';
+
+import { createLlmModel } from '../lib/create-llm-model';
+import { getLlmProviderForModel } from '../lib/llm-provider';
+import { modelSupportsTemperature } from '../lib/model-temperature';
 
 export type QuickEditLlmOptions = {
   model: string;
   maxOutputTokens: number;
 };
-
-function openAiModelSupportsTemperature(modelId: string): boolean {
-  const id = modelId.toLowerCase();
-  if (id.startsWith('gpt-5')) return false;
-  if (id.startsWith('o1') || id.startsWith('o3')) return false;
-  return true;
-}
 
 export async function runQuickEditSelection(
   apiKey: string,
@@ -19,12 +15,12 @@ export async function runQuickEditSelection(
   llm: QuickEditLlmOptions,
   abortSignal?: AbortSignal,
 ): Promise<string> {
-  const openai = createOpenAI({ apiKey });
+  const provider = getLlmProviderForModel(llm.model);
   const { text } = await generateText({
-    model: openai(llm.model),
+    model: createLlmModel(apiKey, llm.model),
     abortSignal,
     maxOutputTokens: llm.maxOutputTokens,
-    ...(openAiModelSupportsTemperature(llm.model) ? { temperature: 0.25 } : {}),
+    ...(modelSupportsTemperature(llm.model, provider) ? { temperature: 0.25 } : {}),
     system: `You revise a highlighted passage in a rich-text document.
 
 Rules:

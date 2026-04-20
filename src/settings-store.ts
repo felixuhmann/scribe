@@ -36,9 +36,13 @@ function normalizeSettings(s: ScribeStoredSettings): ScribeStoredSettings {
     autocompleteTemperature: clampNumber(s.autocompleteTemperature, 0, 1),
     autocompleteMaxOutputTokens: clampInt(s.autocompleteMaxOutputTokens, 32, 512),
   };
-  const key = s.openaiApiKey?.trim();
-  if (key) {
-    next.openaiApiKey = key;
+  const openaiKey = s.openaiApiKey?.trim();
+  if (openaiKey) {
+    next.openaiApiKey = openaiKey;
+  }
+  const anthropicKey = s.anthropicApiKey?.trim();
+  if (anthropicKey) {
+    next.anthropicApiKey = anthropicKey;
   }
   return next;
 }
@@ -66,6 +70,9 @@ export async function readStoredSettings(): Promise<ScribeStoredSettings> {
     if (typeof parsed.openaiApiKey === 'string' && parsed.openaiApiKey.trim() !== '') {
       base.openaiApiKey = parsed.openaiApiKey.trim();
     }
+    if (typeof parsed.anthropicApiKey === 'string' && parsed.anthropicApiKey.trim() !== '') {
+      base.anthropicApiKey = parsed.anthropicApiKey.trim();
+    }
     return normalizeSettings(base);
   } catch {
     return normalizeSettings({ ...defaults });
@@ -76,19 +83,25 @@ export async function writeStoredSettings(next: ScribeStoredSettings): Promise<v
   const normalized = normalizeSettings(next);
   const dir = path.dirname(settingsPath());
   await fs.mkdir(dir, { recursive: true });
-  const { openaiApiKey, ...rest } = normalized;
+  const { openaiApiKey, anthropicApiKey, ...rest } = normalized;
   const payload: Record<string, unknown> = { ...rest };
   if (openaiApiKey) {
     payload.openaiApiKey = openaiApiKey;
+  }
+  if (anthropicApiKey) {
+    payload.anthropicApiKey = anthropicApiKey;
   }
   await fs.writeFile(settingsPath(), `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
 }
 
 export function getPublicSettings(stored: ScribeStoredSettings): ScribeSettingsPublic {
   const envOpenaiApiKeyPresent = Boolean(process.env.OPENAI_API_KEY?.trim());
+  const envAnthropicApiKeyPresent = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
   return {
     hasStoredOpenaiApiKey: Boolean(stored.openaiApiKey?.trim()),
     envOpenaiApiKeyPresent,
+    hasStoredAnthropicApiKey: Boolean(stored.anthropicApiKey?.trim()),
+    envAnthropicApiKeyPresent,
     model: stored.model,
     autocompleteEnabled: stored.autocompleteEnabled,
     autocompleteDebounceMs: stored.autocompleteDebounceMs,
@@ -107,9 +120,16 @@ export async function applySettingsPatch(
     openaiApiKey = v === '' ? undefined : v;
   }
 
+  let anthropicApiKey = current.anthropicApiKey;
+  if (patch.anthropicApiKey !== undefined) {
+    const v = patch.anthropicApiKey.trim();
+    anthropicApiKey = v === '' ? undefined : v;
+  }
+
   const next: ScribeStoredSettings = normalizeSettings({
     ...current,
     openaiApiKey,
+    anthropicApiKey,
     model: patch.model !== undefined ? patch.model : current.model,
     autocompleteEnabled: patch.autocompleteEnabled ?? current.autocompleteEnabled,
     autocompleteDebounceMs: patch.autocompleteDebounceMs ?? current.autocompleteDebounceMs,
@@ -127,4 +147,19 @@ export function resolveOpenAiApiKey(stored: ScribeStoredSettings): string | null
   const fromEnv = process.env.OPENAI_API_KEY?.trim();
   if (fromEnv) return fromEnv;
   return null;
+}
+
+export function resolveAnthropicApiKey(stored: ScribeStoredSettings): string | null {
+  const fromStore = stored.anthropicApiKey?.trim();
+  if (fromStore) return fromStore;
+  const fromEnv = process.env.ANTHROPIC_API_KEY?.trim();
+  if (fromEnv) return fromEnv;
+  return null;
+}
+
+export function resolveApiKeyForProvider(
+  stored: ScribeStoredSettings,
+  provider: 'openai' | 'anthropic',
+): string | null {
+  return provider === 'anthropic' ? resolveAnthropicApiKey(stored) : resolveOpenAiApiKey(stored);
 }

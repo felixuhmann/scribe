@@ -13,14 +13,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 
-import { OPENAI_MODELS } from '@/lib/openai-models';
+import { ANTHROPIC_MODELS, KNOWN_CHAT_MODEL_IDS, OPENAI_MODELS } from '@/lib/chat-models';
 import type { ScribeSetSettingsInput, ScribeSettingsPublic } from '@/src/scribe-ipc-types';
 
-function keyStatusLine(settings: ScribeSettingsPublic | null): string {
+function openAiKeyStatusLine(settings: ScribeSettingsPublic | null): string {
   if (!settings) return '';
-  if (settings.hasStoredOpenaiApiKey) return 'Using the API key saved in Scribe settings.';
+  if (settings.hasStoredOpenaiApiKey) return 'Using the OpenAI key saved in Scribe settings.';
   if (settings.envOpenaiApiKeyPresent) return 'Using OPENAI_API_KEY from your environment (.env).';
-  return 'No API key configured. Add one below or set OPENAI_API_KEY in a .env file.';
+  return 'No OpenAI key in settings or .env. Add one below or set OPENAI_API_KEY in a .env file.';
+}
+
+function anthropicKeyStatusLine(settings: ScribeSettingsPublic | null): string {
+  if (!settings) return '';
+  if (settings.hasStoredAnthropicApiKey) return 'Using the Anthropic key saved in Scribe settings.';
+  if (settings.envAnthropicApiKeyPresent) return 'Using ANTHROPIC_API_KEY from your environment (.env).';
+  return 'No Anthropic key in settings or .env. Add one below or set ANTHROPIC_API_KEY when using Claude models.';
 }
 
 export function SettingsDialog({
@@ -33,7 +40,8 @@ export function SettingsDialog({
   onSaved?: () => void;
 }) {
   const baseId = useId();
-  const apiKeyId = `${baseId}-api-key`;
+  const openaiApiKeyId = `${baseId}-openai-api-key`;
+  const anthropicApiKeyId = `${baseId}-anthropic-api-key`;
   const modelId = `${baseId}-model`;
   const debounceId = `${baseId}-debounce`;
   const tempId = `${baseId}-temperature`;
@@ -41,7 +49,8 @@ export function SettingsDialog({
 
   const [loaded, setLoaded] = useState(false);
   const [settings, setSettings] = useState<ScribeSettingsPublic | null>(null);
-  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [openaiApiKeyInput, setOpenaiApiKeyInput] = useState('');
+  const [anthropicApiKeyInput, setAnthropicApiKeyInput] = useState('');
   const [model, setModel] = useState('gpt-5.4-mini');
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(true);
   const [debounceMs, setDebounceMs] = useState(420);
@@ -67,7 +76,8 @@ export function SettingsDialog({
       setDebounceMs(s.autocompleteDebounceMs);
       setTemperature(s.autocompleteTemperature);
       setMaxOutputTokens(s.autocompleteMaxOutputTokens);
-      setApiKeyInput('');
+      setOpenaiApiKeyInput('');
+      setAnthropicApiKeyInput('');
       setLoaded(true);
     });
   }, [open]);
@@ -88,12 +98,16 @@ export function SettingsDialog({
         autocompleteTemperature: temperature,
         autocompleteMaxOutputTokens: maxOutputTokens,
       };
-      if (apiKeyInput.trim() !== '') {
-        patch.openaiApiKey = apiKeyInput.trim();
+      if (openaiApiKeyInput.trim() !== '') {
+        patch.openaiApiKey = openaiApiKeyInput.trim();
+      }
+      if (anthropicApiKeyInput.trim() !== '') {
+        patch.anthropicApiKey = anthropicApiKeyInput.trim();
       }
       const next = await api(patch);
       setSettings(next);
-      setApiKeyInput('');
+      setOpenaiApiKeyInput('');
+      setAnthropicApiKeyInput('');
       onSaved?.();
       onOpenChange(false);
     } catch (e) {
@@ -102,7 +116,8 @@ export function SettingsDialog({
       setSaving(false);
     }
   }, [
-    apiKeyInput,
+    openaiApiKeyInput,
+    anthropicApiKeyInput,
     autocompleteEnabled,
     debounceMs,
     maxOutputTokens,
@@ -112,7 +127,7 @@ export function SettingsDialog({
     temperature,
   ]);
 
-  const clearStoredKey = useCallback(async () => {
+  const clearStoredOpenaiKey = useCallback(async () => {
     const api = window.scribe?.setSettings;
     if (!api) return;
     setSaving(true);
@@ -120,10 +135,27 @@ export function SettingsDialog({
     try {
       const next = await api({ openaiApiKey: '' });
       setSettings(next);
-      setApiKeyInput('');
+      setOpenaiApiKeyInput('');
       onSaved?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not clear the API key.');
+      setError(e instanceof Error ? e.message : 'Could not clear the OpenAI API key.');
+    } finally {
+      setSaving(false);
+    }
+  }, [onSaved]);
+
+  const clearStoredAnthropicKey = useCallback(async () => {
+    const api = window.scribe?.setSettings;
+    if (!api) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const next = await api({ anthropicApiKey: '' });
+      setSettings(next);
+      setAnthropicApiKeyInput('');
+      onSaved?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not clear the Anthropic API key.');
     } finally {
       setSaving(false);
     }
@@ -135,8 +167,8 @@ export function SettingsDialog({
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
-            Autocomplete runs in the desktop app using your OpenAI key. Keys are stored locally in your user data
-            folder, not synced.
+            Autocomplete and quick actions run in the desktop app using your API keys. Keys are stored locally in your
+            user data folder, not synced.
           </DialogDescription>
         </DialogHeader>
 
@@ -147,21 +179,55 @@ export function SettingsDialog({
             {error ? <p className="text-destructive text-sm">{error}</p> : null}
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor={apiKeyId}>OpenAI API key</Label>
+              <Label htmlFor={openaiApiKeyId}>OpenAI API key</Label>
               <Input
-                id={apiKeyId}
+                id={openaiApiKeyId}
                 type="password"
                 autoComplete="off"
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
+                value={openaiApiKeyInput}
+                onChange={(e) => setOpenaiApiKeyInput(e.target.value)}
                 placeholder={
                   settings?.hasStoredOpenaiApiKey ? '•••••••• (enter a new key to replace)' : 'sk-…'
                 }
               />
-              <p className="text-muted-foreground text-xs">{keyStatusLine(settings)}</p>
+              <p className="text-muted-foreground text-xs">{openAiKeyStatusLine(settings)}</p>
               {settings?.hasStoredOpenaiApiKey ? (
-                <Button type="button" variant="outline" size="sm" className="self-start" onClick={() => void clearStoredKey()} disabled={saving}>
-                  Remove stored key
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="self-start"
+                  onClick={() => void clearStoredOpenaiKey()}
+                  disabled={saving}
+                >
+                  Remove stored OpenAI key
+                </Button>
+              ) : null}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={anthropicApiKeyId}>Anthropic API key</Label>
+              <Input
+                id={anthropicApiKeyId}
+                type="password"
+                autoComplete="off"
+                value={anthropicApiKeyInput}
+                onChange={(e) => setAnthropicApiKeyInput(e.target.value)}
+                placeholder={
+                  settings?.hasStoredAnthropicApiKey ? '•••••••• (enter a new key to replace)' : 'sk-ant-…'
+                }
+              />
+              <p className="text-muted-foreground text-xs">{anthropicKeyStatusLine(settings)}</p>
+              {settings?.hasStoredAnthropicApiKey ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="self-start"
+                  onClick={() => void clearStoredAnthropicKey()}
+                  disabled={saving}
+                >
+                  Remove stored Anthropic key
                 </Button>
               ) : null}
             </div>
@@ -176,17 +242,25 @@ export function SettingsDialog({
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
               >
-                {!OPENAI_MODELS.some((m) => m.id === model) ? (
-                  <option value={model}>{model}</option>
-                ) : null}
-                {OPENAI_MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
+                {!KNOWN_CHAT_MODEL_IDS.has(model) ? <option value={model}>{model}</option> : null}
+                <optgroup label="OpenAI">
+                  {OPENAI_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Anthropic">
+                  {ANTHROPIC_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
               <p className="text-muted-foreground text-xs">
-                Pick a chat model you have access to on your OpenAI account. Pricing and quality vary by model.
+                Pick a model your account can use. OpenAI models need an OpenAI key; Claude models need an Anthropic
+                key. The same choice is used for document chat, tab autocomplete, and quick edit.
               </p>
             </div>
 

@@ -11,6 +11,7 @@ export type ScribeQuickEditResult =
 /** Persisted in the main process (includes secrets). */
 export type ScribeStoredSettings = {
   openaiApiKey?: string;
+  anthropicApiKey?: string;
   model: string;
   autocompleteEnabled: boolean;
   autocompleteDebounceMs: number;
@@ -22,6 +23,8 @@ export type ScribeStoredSettings = {
 export type ScribeSettingsPublic = {
   hasStoredOpenaiApiKey: boolean;
   envOpenaiApiKeyPresent: boolean;
+  hasStoredAnthropicApiKey: boolean;
+  envAnthropicApiKeyPresent: boolean;
   model: string;
   autocompleteEnabled: boolean;
   autocompleteDebounceMs: number;
@@ -30,10 +33,11 @@ export type ScribeSettingsPublic = {
 };
 
 /**
- * `openaiApiKey`: omit to leave unchanged; empty string clears the stored key (falls back to env).
+ * `openaiApiKey` / `anthropicApiKey`: omit to leave unchanged; empty string clears the stored key (falls back to env).
  */
 export type ScribeSetSettingsInput = {
   openaiApiKey?: string;
+  anthropicApiKey?: string;
   model?: string;
   autocompleteEnabled?: boolean;
   autocompleteDebounceMs?: number;

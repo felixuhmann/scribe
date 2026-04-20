@@ -1,11 +1,12 @@
-import { createOpenAI } from '@ai-sdk/openai';
 import {
   InferAgentUIMessage,
   stepCountIs,
   ToolLoopAgent,
-  type LanguageModel,
 } from 'ai';
 
+import { createLlmModel } from '../create-llm-model';
+import { getLlmProviderForModel } from '../llm-provider';
+import { modelSupportsTemperature } from '../model-temperature';
 import type { PlanDepthMode } from '../plan-clarification-gate';
 import { documentChatTools } from './document-chat-tools';
 
@@ -43,13 +44,6 @@ export type DocumentChatAgentInstance = ToolLoopAgent<
 >;
 
 export type DocumentChatUIMessage = InferAgentUIMessage<DocumentChatAgentInstance>;
-
-function openAiModelSupportsTemperature(modelId: string): boolean {
-  const id = modelId.toLowerCase();
-  if (id.startsWith('gpt-5')) return false;
-  if (id.startsWith('o1') || id.startsWith('o3')) return false;
-  return true;
-}
 
 const BASE_INSTRUCTIONS = `You are Scribe's document assistant. You see the user's chat messages plus the CURRENT_DOCUMENT_HTML block that mirrors what is in their editor right now. If DOCUMENT_CHANGE_SINCE_LAST_TURN is present, it summarizes edits since your last completed turn in this thread; always treat CURRENT_DOCUMENT_HTML as the single source of truth.
 
@@ -106,8 +100,8 @@ export function createDocumentChatAgent(options: {
   /** Plan mode only. Default fixed (mandatory rounds per depth setting). */
   planDepthMode?: PlanDepthMode;
 }): DocumentChatAgentInstance {
-  const openai = createOpenAI({ apiKey: options.apiKey });
-  const model: LanguageModel = openai(options.modelId);
+  const provider = getLlmProviderForModel(options.modelId);
+  const model = createLlmModel(options.apiKey, options.modelId);
   const planDepthMode = options.planDepthMode ?? 'fixed';
   const planInstructions =
     planDepthMode === 'auto' ? PLAN_MODE_INSTRUCTIONS_AUTO : PLAN_MODE_INSTRUCTIONS_FIXED;
@@ -172,7 +166,7 @@ ${
     instructions,
     stopWhen: stepCountIs(options.mode === 'plan' ? 24 : 16),
     maxOutputTokens: options.maxOutputTokens,
-    ...(openAiModelSupportsTemperature(options.modelId) ? { temperature: 0.25 } : {}),
+    ...(modelSupportsTemperature(options.modelId, provider) ? { temperature: 0.25 } : {}),
   };
 
   if (options.mode === 'plan') {

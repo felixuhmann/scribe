@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
+import { getLlmProviderForModel } from '../lib/llm-provider';
 import { runAutocomplete } from './autocomplete-agent';
 import { runQuickEditSelection } from './quick-edit-selection-agent';
 import type {
@@ -23,7 +24,7 @@ import {
   applySettingsPatch,
   getPublicSettings,
   readStoredSettings,
-  resolveOpenAiApiKey,
+  resolveApiKeyForProvider,
 } from './settings-store';
 import {
   getDocumentChatBundle,
@@ -389,12 +390,15 @@ ipcMain.handle(
     quickEditAbort = new AbortController();
     const { signal } = quickEditAbort;
     const stored = await readStoredSettings();
-    const apiKey = resolveOpenAiApiKey(stored);
+    const provider = getLlmProviderForModel(stored.model);
+    const apiKey = resolveApiKeyForProvider(stored, provider);
     if (!apiKey) {
       return {
         ok: false as const,
         error:
-          'No OpenAI API key found. Add OPENAI_API_KEY to a .env file, or set a key in Settings.',
+          provider === 'anthropic'
+            ? 'No Anthropic API key found. Add ANTHROPIC_API_KEY to a .env file, or set a key in Settings.'
+            : 'No OpenAI API key found. Add OPENAI_API_KEY to a .env file, or set a key in Settings.',
       };
     }
     const trimmedInstruction = payload.instruction.trim();
@@ -440,12 +444,15 @@ ipcMain.handle(
     autocompleteAbort = new AbortController();
     const { signal } = autocompleteAbort;
     const stored = await readStoredSettings();
-    const apiKey = resolveOpenAiApiKey(stored);
+    const provider = getLlmProviderForModel(stored.model);
+    const apiKey = resolveApiKeyForProvider(stored, provider);
     if (!apiKey) {
       return {
         ok: false as const,
         error:
-          'No OpenAI API key found. Add OPENAI_API_KEY to a .env file, or set a key in Settings.',
+          provider === 'anthropic'
+            ? 'No Anthropic API key found. Add ANTHROPIC_API_KEY to a .env file, or set a key in Settings.'
+            : 'No OpenAI API key found. Add OPENAI_API_KEY to a .env file, or set a key in Settings.',
       };
     }
     if (!stored.autocompleteEnabled) {

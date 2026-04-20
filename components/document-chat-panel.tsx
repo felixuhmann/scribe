@@ -21,7 +21,7 @@ import {
 } from '@/lib/plan-mode';
 import { buildDocumentChangeSummary } from '@/lib/document-change-summary';
 import { ElectronIpcChatTransport } from '@/lib/electron-ipc-chat-transport';
-import { OPENAI_MODELS } from '@/lib/openai-models';
+import { ANTHROPIC_MODELS, KNOWN_CHAT_MODEL_IDS, OPENAI_MODELS } from '@/lib/chat-models';
 import type { DocumentChatBundle, StoredChatSession } from '@/src/scribe-ipc-types';
 
 import {
@@ -475,20 +475,27 @@ function DocumentChatSessionView({
             </div>
             <select
               id="scribe-chat-model"
-              aria-label="OpenAI model"
+              aria-label="Chat model"
               className="border-input bg-background ring-offset-background focus-visible:ring-ring h-8 min-w-0 flex-1 rounded-md border px-2 text-xs shadow-xs focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:max-w-[12rem]"
               value={chatModel}
               disabled={busy || !window.scribe?.setSettings}
               onChange={(e) => persistChatModel(e.target.value)}
             >
-              {!OPENAI_MODELS.some((m) => m.id === chatModel) ? (
-                <option value={chatModel}>{chatModel}</option>
-              ) : null}
-              {OPENAI_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
+              {!KNOWN_CHAT_MODEL_IDS.has(chatModel) ? <option value={chatModel}>{chatModel}</option> : null}
+              <optgroup label="OpenAI">
+                {OPENAI_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Anthropic">
+                {ANTHROPIC_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </div>
           <div className="flex shrink-0 justify-end gap-2">

@@ -7,13 +7,14 @@ import {
   type DocumentChatUIMessage,
 } from '../lib/agents/document-chat-agent';
 import { documentChatTools } from '../lib/agents/document-chat-tools';
+import { getLlmProviderForModel } from '../lib/llm-provider';
 import {
   clampPlanRefinementRounds,
   countPlanAnswerMessages,
   shouldForcePlanClarificationRound,
   type PlanDepthMode,
 } from '../lib/plan-clarification-gate';
-import { readStoredSettings, resolveOpenAiApiKey } from './settings-store';
+import { readStoredSettings, resolveApiKeyForProvider } from './settings-store';
 
 const DOCUMENT_CHAT_MAX_OUTPUT_TOKENS = 8192;
 
@@ -71,12 +72,15 @@ export async function runDocumentChatSession(options: {
   abortControllers.set(requestId, controller);
 
   const stored = await readStoredSettings();
-  const apiKey = resolveOpenAiApiKey(stored);
+  const provider = getLlmProviderForModel(stored.model);
+  const apiKey = resolveApiKeyForProvider(stored, provider);
   if (!apiKey) {
     webContents.send('scribe:documentChat:end', {
       id: requestId,
       error:
-        'No OpenAI API key found. Add OPENAI_API_KEY to a .env file, or set a key in Settings.',
+        provider === 'anthropic'
+          ? 'No Anthropic API key found. Add ANTHROPIC_API_KEY to a .env file, or set a key in Settings.'
+          : 'No OpenAI API key found. Add OPENAI_API_KEY to a .env file, or set a key in Settings.',
     });
     abortControllers.delete(requestId);
     return;
