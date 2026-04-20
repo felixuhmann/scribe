@@ -238,7 +238,7 @@ export function SettingsDialog({
               <Label htmlFor={modelId}>Model</Label>
               <ChatModelSelect
                 id={modelId}
-                className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm shadow-xs focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+                className="w-full"
                 value={model}
                 onChange={setModel}
               />

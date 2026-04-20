@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
+import { PlusIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import type { PlanAnswerPayload } from '@/lib/plan-answers-protocol';
 import { cn } from '@/lib/utils';
 
@@ -28,13 +29,19 @@ export function PlanClarificationForm({
     questions.map(() => null),
   );
   const [custom, setCustom] = useState<string[]>(() => questions.map(() => ''));
+  const [customOpen, setCustomOpen] = useState<boolean[]>(() => questions.map(() => false));
 
-  const canSubmit = useMemo(() => {
-    return questions.every((_, i) => {
-      const c = custom[i]?.trim() ?? '';
-      return c.length > 0 || selected[i] !== null;
-    });
-  }, [questions, selected, custom]);
+  const answeredCount = useMemo(
+    () =>
+      questions.reduce((acc, _q, i) => {
+        const c = custom[i]?.trim() ?? '';
+        const hasAnswer = c.length > 0 || selected[i] !== null;
+        return acc + (hasAnswer ? 1 : 0);
+      }, 0),
+    [questions, selected, custom],
+  );
+
+  const canSubmit = answeredCount === questions.length;
 
   const onSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -63,77 +70,118 @@ export function PlanClarificationForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="border-border bg-muted/30 mt-2 space-y-3 rounded-md border p-3"
+      className="border-border bg-card text-card-foreground mt-2 flex flex-col gap-3 rounded-lg border px-3 py-3"
     >
-      <p className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
-        Your answers
-      </p>
-      <div className="space-y-4">
-        {questions.map((q, qi) => (
-          <div key={q.id} className="space-y-2">
-            <p className="text-foreground text-sm leading-snug">{q.prompt}</p>
-            <div className="flex flex-col gap-1.5">
-              {q.options.map((label, oi) => {
-                const idx = oi as 0 | 1 | 2;
-                const isOn = selected[qi] === idx && !(custom[qi]?.trim());
-                return (
-                  <button
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-foreground text-[11px] font-semibold uppercase tracking-wide">
+          Help the assistant plan
+        </p>
+        <ProgressPips total={questions.length} complete={answeredCount} />
+      </div>
+      <div className="flex flex-col gap-3">
+        {questions.map((q, qi) => {
+          const value = (() => {
+            if (custom[qi]?.trim()) return '';
+            const v = selected[qi];
+            return v === null ? '' : String(v);
+          })();
+          const hasCustom = Boolean(custom[qi]?.trim());
+          return (
+            <div key={q.id} className="flex flex-col gap-1.5">
+              <p className="text-foreground text-sm leading-snug">{q.prompt}</p>
+              <ToggleGroup
+                type="single"
+                variant="outline"
+                size="sm"
+                spacing={1}
+                value={value}
+                onValueChange={(next) => {
+                  if (next === '') return;
+                  const idx = Number.parseInt(next, 10) as 0 | 1 | 2;
+                  setSelected((prev) => {
+                    const n = [...prev];
+                    n[qi] = idx;
+                    return n;
+                  });
+                  setCustom((prev) => {
+                    const n = [...prev];
+                    n[qi] = '';
+                    return n;
+                  });
+                }}
+                disabled={disabled}
+                className="flex-wrap justify-start"
+              >
+                {q.options.map((label, oi) => (
+                  <ToggleGroupItem
                     key={oi}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => {
-                      setSelected((prev) => {
-                        const next = [...prev];
-                        next[qi] = idx;
-                        return next;
-                      });
-                      setCustom((prev) => {
-                        const next = [...prev];
-                        next[qi] = '';
-                        return next;
-                      });
-                    }}
-                    className={cn(
-                      'border-border hover:bg-muted/80 rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors',
-                      isOn && 'border-primary bg-primary/10 ring-primary/30 ring-1',
-                    )}
+                    value={String(oi)}
+                    className={cn('h-7 rounded-full text-xs', hasCustom && 'opacity-60')}
                   >
                     {label}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={`plan-custom-${q.id}`} className="text-muted-foreground text-[11px]">
-                Something else (optional)
-              </Label>
-              <Textarea
-                id={`plan-custom-${q.id}`}
-                value={custom[qi] ?? ''}
-                disabled={disabled}
-                placeholder="Type a different answer…"
-                className="min-h-[56px] resize-none text-xs"
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setCustom((prev) => {
-                    const next = [...prev];
-                    next[qi] = v;
-                    return next;
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+              <Collapsible
+                open={customOpen[qi] || hasCustom}
+                onOpenChange={(open) => {
+                  setCustomOpen((prev) => {
+                    const n = [...prev];
+                    n[qi] = open;
+                    return n;
                   });
-                  if (v.trim()) {
-                    setSelected((prev) => {
-                      const next = [...prev];
-                      next[qi] = null;
-                      return next;
+                  if (!open) {
+                    setCustom((prev) => {
+                      const n = [...prev];
+                      n[qi] = '';
+                      return n;
                     });
                   }
                 }}
-              />
+              >
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground w-fit text-xs"
+                    disabled={disabled}
+                  >
+                    <PlusIcon className="mr-0.5 inline size-3 align-[-2px]" aria-hidden />
+                    {customOpen[qi] || hasCustom ? 'Hide custom answer' : 'Write a different answer'}
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-1.5">
+                  <input
+                    type="text"
+                    value={custom[qi] ?? ''}
+                    disabled={disabled}
+                    placeholder="Type your own answer…"
+                    className="border-input bg-background focus-visible:ring-ring h-8 w-full rounded-md border px-2 text-xs focus-visible:ring-2 focus-visible:outline-none"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setCustom((prev) => {
+                        const n = [...prev];
+                        n[qi] = v;
+                        return n;
+                      });
+                      if (v.trim()) {
+                        setSelected((prev) => {
+                          const n = [...prev];
+                          n[qi] = null;
+                          return n;
+                        });
+                      }
+                    }}
+                  />
+                </CollapsibleContent>
+              </Collapsible>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-muted-foreground text-xs">
+          {answeredCount}/{questions.length} answered
+        </p>
         <Button type="submit" size="sm" disabled={disabled || !canSubmit}>
           Submit answers
         </Button>
@@ -142,14 +190,30 @@ export function PlanClarificationForm({
   );
 }
 
+function ProgressPips({ total, complete }: { total: number; complete: number }) {
+  return (
+    <div className="flex shrink-0 items-center gap-1" aria-label={`${complete} of ${total} answered`}>
+      {Array.from({ length: total }).map((_, i) => (
+        <span
+          key={i}
+          className={cn(
+            'size-1.5 rounded-full',
+            i < complete ? 'bg-primary' : 'bg-muted-foreground/30',
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function PlanAnswersSubmittedBubble({ payload }: { payload: PlanAnswerPayload }) {
   const lines = payload.summaryLines?.length
     ? payload.summaryLines
     : payload.answers.map((a) => a.id + (a.custom != null ? `: ${a.custom}` : ` [${a.optionIndex}]`));
   return (
-    <div className="space-y-1">
-      <p className="text-sidebar-foreground/60 text-[10px] font-semibold uppercase">Plan choices</p>
-      <ul className="list-disc space-y-0.5 pl-4 text-xs">
+    <div className="flex flex-col gap-1">
+      <p className="text-muted-foreground text-[11px] font-semibold uppercase">Plan choices</p>
+      <ul className="list-disc pl-4 text-xs leading-snug">
         {lines.map((line, i) => (
           <li key={i}>{line}</li>
         ))}
@@ -160,16 +224,23 @@ export function PlanAnswersSubmittedBubble({ payload }: { payload: PlanAnswerPay
 
 export function PastClarificationRound({ questions }: { questions: ClarificationQuestion[] }) {
   return (
-    <div className="border-border/60 bg-muted/15 mt-2 rounded-md border px-2 py-1.5">
-      <p className="text-muted-foreground text-[10px] font-medium uppercase">
-        Clarification ({questions.length} question{questions.length === 1 ? '' : 's'})
-      </p>
-      <ul className="mt-1 list-disc space-y-0.5 pl-3 text-[11px] opacity-90">
-        {questions.map((q) => (
-          <li key={q.id}>{q.prompt}</li>
-        ))}
-      </ul>
-    </div>
+    <Collapsible className="mt-2">
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="border-border/60 bg-muted/20 text-muted-foreground hover:text-foreground flex w-full items-center gap-2 rounded-md border px-2 py-1 text-left text-[11px]"
+        >
+          <span className="bg-muted-foreground/30 size-1.5 rounded-full" aria-hidden />
+          Clarification · {questions.length} question{questions.length === 1 ? '' : 's'}
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-1">
+        <ul className="list-disc pl-4 text-xs leading-snug opacity-90">
+          {questions.map((q) => (
+            <li key={q.id}>{q.prompt}</li>
+          ))}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
-

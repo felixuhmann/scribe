@@ -1,25 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ArchiveIcon,
-  ArchiveRestoreIcon,
-  ChevronDownIcon,
-  MessageSquarePlusIcon,
-  Trash2Icon,
-} from 'lucide-react';
 
 import { useDocumentWorkspace } from '@/components/document-workspace-context';
 import { useEditorSession } from '@/components/editor-session-context';
-import { Button } from '@/components/ui/button';
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from '@/components/ui/alert';
 import type { DocumentChatUIMessage } from '@/lib/agents/document-chat-agent';
 import type { DocumentChatBundle, StoredChatSession } from '@/src/scribe-ipc-types';
 
+import { ChatHeader } from './chat-header';
 import { chatTitleFromMessages } from './chat-session-title';
 import { DocumentChatSessionView } from './document-chat-session-view';
+import { SessionsRail } from './sessions-rail';
 
 function parseInitialMessages(raw: unknown): DocumentChatUIMessage[] {
   if (!Array.isArray(raw)) return [];
@@ -36,6 +30,7 @@ export function DocumentChatPanel() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [archivedChatsOpen, setArchivedChatsOpen] = useState(false);
+  const [railCollapsed, setRailCollapsed] = useState(false);
   /**
    * useChat must receive the correct `messages` on the first paint after a document/session switch.
    * A ref snapshot updates synchronously when `${documentKey}::${activeSessionId}` changes, but not
@@ -110,7 +105,15 @@ export function DocumentChatPanel() {
         setBundle((prev) => {
           if (!prev) return prev;
           const sessions = prev.sessions.map((s) =>
-            s.id === sessionId ? { ...s, messages, title, updatedAt } : s,
+            s.id === sessionId
+              ? {
+                  ...s,
+                  messages,
+                  // Preserve manual renames: chat-title-from-messages is only used when title is still the default.
+                  title: s.title === 'New chat' ? title : s.title,
+                  updatedAt,
+                }
+              : s,
           );
           const next: DocumentChatBundle = { ...prev, sessions };
           saveBundle(next);
@@ -186,70 +189,97 @@ export function DocumentChatPanel() {
     setActiveSessionId(id);
   }, [bundleSourceKey, documentKey, saveBundle]);
 
-  const deleteActiveSession = useCallback(() => {
-    if (!effectiveBundle || !activeSessionId) return;
-    const remaining = effectiveBundle.sessions.filter((s) => s.id !== activeSessionId);
-    if (remaining.length === 0) {
-      const id = crypto.randomUUID();
-      const now = Date.now();
-      const session: StoredChatSession = {
-        id,
-        title: 'New chat',
-        messages: [],
-        updatedAt: now,
+  const deleteSession = useCallback(
+    (sessionId: string) => {
+      if (!effectiveBundle) return;
+      const remaining = effectiveBundle.sessions.filter((s) => s.id !== sessionId);
+      if (remaining.length === 0) {
+        const id = crypto.randomUUID();
+        const now = Date.now();
+        const session: StoredChatSession = {
+          id,
+          title: 'New chat',
+          messages: [],
+          updatedAt: now,
+        };
+        const next: DocumentChatBundle = { activeSessionId: id, sessions: [session] };
+        saveBundle(next);
+        setBundle(next);
+        setActiveSessionId(id);
+        return;
+      }
+      let nextActive = effectiveBundle.activeSessionId;
+      if (nextActive === sessionId) {
+        nextActive = remaining.find((s) => !s.archived)?.id ?? remaining[0].id;
+      }
+      const next: DocumentChatBundle = {
+        activeSessionId: nextActive,
+        sessions: remaining,
       };
-      const next: DocumentChatBundle = { activeSessionId: id, sessions: [session] };
       saveBundle(next);
       setBundle(next);
-      setActiveSessionId(id);
-      return;
-    }
-    const nextActive = remaining.find((s) => !s.archived)?.id ?? remaining[0].id;
-    const next: DocumentChatBundle = {
-      activeSessionId: nextActive,
-      sessions: remaining,
-    };
-    saveBundle(next);
-    setBundle(next);
-    setActiveSessionId(nextActive);
-  }, [effectiveBundle, activeSessionId, saveBundle]);
+      setActiveSessionId(nextActive);
+    },
+    [effectiveBundle, saveBundle],
+  );
 
-  const archiveActiveSession = useCallback(() => {
-    if (!effectiveBundle || !activeSessionId) return;
-    let sessions = effectiveBundle.sessions.map((s) =>
-      s.id === activeSessionId ? { ...s, archived: true as const } : s,
-    );
-    const available = sessions.filter((s) => !s.archived);
-    let newActiveId: string;
-    if (available.length === 0) {
-      newActiveId = crypto.randomUUID();
-      const now = Date.now();
-      sessions = [
-        ...sessions,
-        { id: newActiveId, title: 'New chat', messages: [], updatedAt: now },
-      ];
-    } else {
-      newActiveId = available[0].id;
-    }
-    const next: DocumentChatBundle = { activeSessionId: newActiveId, sessions };
-    saveBundle(next);
-    setBundle(next);
-    setActiveSessionId(newActiveId);
-  }, [effectiveBundle, activeSessionId, saveBundle]);
+  const archiveSession = useCallback(
+    (sessionId: string) => {
+      if (!effectiveBundle) return;
+      let sessions = effectiveBundle.sessions.map((s) =>
+        s.id === sessionId ? { ...s, archived: true as const } : s,
+      );
+      const available = sessions.filter((s) => !s.archived);
+      let nextActive = effectiveBundle.activeSessionId;
+      if (nextActive === sessionId) {
+        if (available.length === 0) {
+          nextActive = crypto.randomUUID();
+          const now = Date.now();
+          sessions = [
+            ...sessions,
+            { id: nextActive, title: 'New chat', messages: [], updatedAt: now },
+          ];
+        } else {
+          nextActive = available[0].id;
+        }
+      }
+      const next: DocumentChatBundle = { activeSessionId: nextActive, sessions };
+      saveBundle(next);
+      setBundle(next);
+      setActiveSessionId(nextActive);
+    },
+    [effectiveBundle, saveBundle],
+  );
 
-  const unarchiveActiveSession = useCallback(() => {
-    if (!effectiveBundle || !activeSessionId) return;
-    const sessions = effectiveBundle.sessions.map((s) => {
-      if (s.id !== activeSessionId) return s;
-      if (!s.archived) return s;
-      const { archived: _a, ...rest } = s;
-      void _a;
-      return rest;
-    });
-    const next: DocumentChatBundle = { ...effectiveBundle, sessions };
-    saveBundle(next);
-    setBundle(next);
-  }, [effectiveBundle, activeSessionId, saveBundle]);
+  const unarchiveSession = useCallback(
+    (sessionId: string) => {
+      if (!effectiveBundle) return;
+      const sessions = effectiveBundle.sessions.map((s) => {
+        if (s.id !== sessionId) return s;
+        if (!s.archived) return s;
+        const { archived: _a, ...rest } = s;
+        void _a;
+        return rest;
+      });
+      const next: DocumentChatBundle = { ...effectiveBundle, sessions };
+      saveBundle(next);
+      setBundle(next);
+    },
+    [effectiveBundle, saveBundle],
+  );
+
+  const renameSession = useCallback(
+    (sessionId: string, nextTitle: string) => {
+      if (!effectiveBundle) return;
+      const sessions = effectiveBundle.sessions.map((s) =>
+        s.id === sessionId ? { ...s, title: nextTitle, updatedAt: Date.now() } : s,
+      );
+      const next: DocumentChatBundle = { ...effectiveBundle, sessions };
+      saveBundle(next);
+      setBundle(next);
+    },
+    [effectiveBundle, saveBundle],
+  );
 
   const editorReady = Boolean(editor);
 
@@ -267,158 +297,46 @@ export function DocumentChatPanel() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-row gap-3 px-1">
-      <div className="border-sidebar-border/80 flex w-[148px] shrink-0 flex-col gap-1.5 border-r pr-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-8 w-full justify-start gap-1.5 px-2 text-xs"
-          disabled={!effectiveBundle}
-          onClick={newChat}
-        >
-          <MessageSquarePlusIcon className="size-3.5 shrink-0" aria-hidden />
-          New chat
-        </Button>
-        <div className="text-sidebar-foreground/60 min-h-0 flex-1 overflow-y-auto text-[10px] leading-snug">
-          {effectiveBundle ? (
-            <>
-              <ul className="flex flex-col gap-0.5">
-                {effectiveBundle.sessions
-                  .filter((s) => !s.archived)
-                  .map((s) => {
-                    const selected = s.id === activeSessionId;
-                    return (
-                      <li key={s.id}>
-                        <button
-                          type="button"
-                          onClick={() => selectSession(s.id)}
-                          className={
-                            selected
-                              ? 'bg-sidebar-accent text-sidebar-accent-foreground w-full rounded-md px-1.5 py-1 text-left text-[11px] font-medium'
-                              : 'hover:bg-muted/80 text-sidebar-foreground/90 w-full rounded-md px-1.5 py-1 text-left text-[11px]'
-                          }
-                          title={s.title}
-                        >
-                          <span className="line-clamp-2">{s.title}</span>
-                        </button>
-                      </li>
-                    );
-                  })}
-              </ul>
-              {effectiveBundle.sessions.some((s) => s.archived) ? (
-                <Collapsible
-                  open={archivedChatsOpen}
-                  onOpenChange={setArchivedChatsOpen}
-                  className="border-sidebar-border/60 group/collapsible mt-2 border-t pt-2"
-                >
-                  <CollapsibleTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-sidebar-foreground/70 hover:text-sidebar-foreground h-7 w-full justify-start px-1.5 text-[9px] font-medium uppercase"
-                    >
-                      <ChevronDownIcon
-                        data-icon="inline-start"
-                        className="transition-transform group-data-[state=open]/collapsible:rotate-180"
-                        aria-hidden
-                      />
-                      Archived
-                    </Button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <ul className="flex flex-col gap-0.5 pt-0.5">
-                      {effectiveBundle.sessions
-                        .filter((s) => s.archived)
-                        .map((s) => {
-                          const selected = s.id === activeSessionId;
-                          return (
-                            <li key={s.id}>
-                              <button
-                                type="button"
-                                onClick={() => selectSession(s.id)}
-                                className={
-                                  selected
-                                    ? 'bg-sidebar-accent/80 text-sidebar-accent-foreground w-full rounded-md px-1.5 py-1 text-left text-[11px] font-medium'
-                                    : 'hover:bg-muted/60 text-sidebar-foreground/70 w-full rounded-md px-1.5 py-1 text-left text-[11px]'
-                                }
-                                title={s.title}
-                              >
-                                <span className="line-clamp-2">{s.title}</span>
-                              </button>
-                            </li>
-                          );
-                        })}
-                    </ul>
-                  </CollapsibleContent>
-                </Collapsible>
-              ) : null}
-            </>
-          ) : (
-            <p className="text-muted-foreground px-0.5">…</p>
-          )}
-        </div>
-      </div>
+      <SessionsRail
+        bundle={effectiveBundle}
+        activeSessionId={activeSessionId}
+        collapsed={railCollapsed}
+        onToggleCollapsed={() => setRailCollapsed((v) => !v)}
+        archivedOpen={archivedChatsOpen}
+        onArchivedOpenChange={setArchivedChatsOpen}
+        onSelect={selectSession}
+        onNewChat={newChat}
+        onRename={(s, next) => renameSession(s.id, next)}
+        onArchiveToggle={(s) => (s.archived ? unarchiveSession(s.id) : archiveSession(s.id))}
+        onDelete={(s) => deleteSession(s.id)}
+      />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
-        <div className="flex items-start gap-2 px-0.5">
-          <div className="min-w-0 flex-1">
-            <div className="text-sidebar-foreground/80 text-xs font-medium tracking-wide uppercase">
-              Assistant
-            </div>
-            <p className="text-sidebar-foreground/55 mt-0.5 truncate text-[10px]" title={documentKey}>
-              {documentLabel}
-            </p>
-          </div>
-          {effectiveBundle && activeSessionId ? (
-            <div className="flex shrink-0 gap-0.5 pt-0.5">
-              {activeSessionArchived ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="text-sidebar-foreground/70 hover:text-sidebar-foreground size-7"
-                  title="Restore chat to main list"
-                  aria-label="Restore archived chat"
-                  onClick={unarchiveActiveSession}
-                >
-                  <ArchiveRestoreIcon className="size-3.5" aria-hidden />
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="text-sidebar-foreground/70 hover:text-sidebar-foreground size-7"
-                  title="Archive this chat"
-                  aria-label="Archive chat"
-                  onClick={archiveActiveSession}
-                >
-                  <ArchiveIcon className="size-3.5" aria-hidden />
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-sidebar-foreground/70 hover:text-destructive size-7"
-                title="Delete this chat"
-                aria-label="Delete chat"
-                onClick={deleteActiveSession}
-              >
-                <Trash2Icon className="size-3.5" aria-hidden />
-              </Button>
-            </div>
-          ) : null}
-        </div>
+        <ChatHeader
+          documentLabel={documentLabel}
+          documentKey={documentKey}
+          activeSession={activeSessionMeta}
+          onRenameActive={(next) =>
+            activeSessionId ? renameSession(activeSessionId, next) : undefined
+          }
+          onArchiveActive={() => activeSessionId && archiveSession(activeSessionId)}
+          onUnarchiveActive={() => activeSessionId && unarchiveSession(activeSessionId)}
+          onDeleteActive={() => activeSessionId && deleteSession(activeSessionId)}
+        />
 
-        {loadError ? <p className="text-destructive text-xs">{loadError}</p> : null}
+        {loadError ? (
+          <Alert variant="destructive">
+            <AlertTitle>Chat storage error</AlertTitle>
+            <AlertDescription>{loadError}</AlertDescription>
+          </Alert>
+        ) : null}
 
         {effectiveBundle && activeSessionId ? (
           <DocumentChatSessionView
             key={`${documentKey}::${activeSessionId}`}
             sessionId={activeSessionId}
             documentKey={documentKey}
+            documentLabel={documentLabel}
             initialMessages={initialMessagesForView}
             initialLastAgentDocumentHtml={
               effectiveBundle.sessions.find((s) => s.id === activeSessionId)?.lastAgentDocumentHtml

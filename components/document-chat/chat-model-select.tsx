@@ -1,3 +1,13 @@
+import { cn } from '@/lib/utils';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { ANTHROPIC_MODELS, KNOWN_CHAT_MODEL_IDS, OPENAI_MODELS } from '@/lib/llm';
 
 /**
@@ -12,6 +22,7 @@ export function ChatModelSelect({
   disabled,
   className,
   ariaLabel,
+  size = 'default',
 }: {
   id?: string;
   value: string;
@@ -19,31 +30,38 @@ export function ChatModelSelect({
   disabled?: boolean;
   className?: string;
   ariaLabel?: string;
+  size?: 'sm' | 'default';
 }) {
+  const isKnown = KNOWN_CHAT_MODEL_IDS.has(value);
   return (
-    <select
-      id={id}
-      aria-label={ariaLabel}
-      className={className}
-      value={value}
-      disabled={disabled}
-      onChange={(e) => onChange(e.target.value)}
-    >
-      {!KNOWN_CHAT_MODEL_IDS.has(value) ? <option value={value}>{value}</option> : null}
-      <optgroup label="OpenAI">
-        {OPENAI_MODELS.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.label}
-          </option>
-        ))}
-      </optgroup>
-      <optgroup label="Anthropic">
-        {ANTHROPIC_MODELS.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.label}
-          </option>
-        ))}
-      </optgroup>
-    </select>
+    <Select value={value} disabled={disabled} onValueChange={onChange}>
+      <SelectTrigger id={id} aria-label={ariaLabel} size={size} className={cn(className)}>
+        <SelectValue placeholder="Model" />
+      </SelectTrigger>
+      <SelectContent>
+        {!isKnown ? (
+          <SelectGroup>
+            <SelectLabel>Saved</SelectLabel>
+            <SelectItem value={value}>{value}</SelectItem>
+          </SelectGroup>
+        ) : null}
+        <SelectGroup>
+          <SelectLabel>OpenAI</SelectLabel>
+          {OPENAI_MODELS.map((m) => (
+            <SelectItem key={m.id} value={m.id}>
+              {m.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+        <SelectGroup>
+          <SelectLabel>Anthropic</SelectLabel>
+          {ANTHROPIC_MODELS.map((m) => (
+            <SelectItem key={m.id} value={m.id}>
+              {m.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   );
 }

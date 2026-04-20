@@ -13,6 +13,19 @@ import { OPENAI_MODELS } from '@/lib/llm';
 import { ElectronIpcChatTransport } from './electron-ipc-chat-transport';
 import { getSetDocumentOutput } from './message-parts/tool-set-document-html';
 
+export type ChatMode = 'edit' | 'plan';
+
+/**
+ * What the assistant is currently doing — used by the status chip.
+ * `idle` while waiting for input; other values indicate an active stream phase.
+ */
+export type StreamingPhase =
+  | 'idle'
+  | 'thinking'
+  | 'writing'
+  | 'applyingEdit'
+  | 'draftingQuestions';
+
 export type DocumentChatSessionHookOptions = {
   sessionId: string;
   documentKey: string;
@@ -34,8 +47,9 @@ export type DocumentChatSessionHookResult = ReturnType<typeof useDocumentChatSes
  * Owns every side-effectful concern of one chat session:
  * IPC transport wiring, `useChat` instance, model/mode state + persistence,
  * debounced + visibilitychange + pagehide message persistence, tool output
- * replay into the Tiptap editor, and plan-mode send helpers. The view
- * component only renders JSX from the returned state.
+ * replay into the Tiptap editor, per-tool Undo snapshots, retry / edit-last
+ * helpers, and plan-mode send helpers. The view component only renders JSX
+ * from the returned state.
  */
 export function useDocumentChatSession({
   sessionId,
@@ -50,11 +64,13 @@ export function useDocumentChatSession({
   /** After first editor+messages sync: do not replay persisted tool HTML into the editor (would clobber current doc). */
   const toolReplayHydratedRef = useRef(false);
   const lastSeenRef = useRef<string | null>(initialLastAgentDocumentHtml ?? null);
+  /** Pre-apply HTML keyed by `toolCallId`, captured at the exact moment the tool output is pushed into Tiptap. */
+  const preEditByToolIdRef = useRef<Map<string, string>>(new Map());
   const editorRef = useRef<ReturnType<typeof useEditorSession>['editor']>(null);
   const { editor } = useEditorSession();
   editorRef.current = editor;
 
-  const [chatMode, setChatMode] = useState<'edit' | 'plan'>('edit');
+  const [chatMode, setChatMode] = useState<ChatMode>('edit');
   /** `useChat` keeps the first `transport` instance; read mode from a ref so IPC always sees the current dropdown value. */
   const chatModeRef = useRef(chatMode);
   chatModeRef.current = chatMode;
@@ -126,7 +142,7 @@ export function useDocumentChatSession({
     [getDocumentContext, onStreamComplete],
   );
 
-  const { messages, sendMessage, status, stop, error } = useChat<DocumentChatUIMessage>({
+  const { messages, sendMessage, setMessages, status, stop, error } = useChat<DocumentChatUIMessage>({
     id: `${documentKey}::${sessionId}`,
     messages: initialMessages,
     transport,
@@ -190,6 +206,8 @@ export function useDocumentChatSession({
         if (!payload?.html) continue;
         const id = 'toolCallId' in part && typeof part.toolCallId === 'string' ? part.toolCallId : '';
         if (!id || appliedToolIds.current.has(id)) continue;
+        // Capture the HTML *immediately before* the edit is applied, so Undo can restore the exact pre-edit state.
+        preEditByToolIdRef.current.set(id, editor.getHTML());
         appliedToolIds.current.add(id);
         editor.chain().focus().setContent(payload.html, { emitUpdate: true }).run();
       }
@@ -205,6 +223,35 @@ export function useDocumentChatSession({
       (p) => p.type === 'tool-requestClarifications' && p.state === 'output-available',
     );
   }, [messages]);
+
+  /** Classify the current stream phase based on the last assistant message's parts. */
+  const streamingPhase: StreamingPhase = useMemo(() => {
+    if (status === 'submitted') return 'thinking';
+    if (status !== 'streaming') return 'idle';
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== 'assistant') return 'thinking';
+    let hasInProgressSetDoc = false;
+    let hasInProgressClarify = false;
+    for (const p of last.parts) {
+      if (
+        p.type === 'tool-setDocumentHtml' &&
+        p.state !== 'output-available' &&
+        p.state !== 'output-error'
+      ) {
+        hasInProgressSetDoc = true;
+      }
+      if (
+        p.type === 'tool-requestClarifications' &&
+        p.state !== 'output-available' &&
+        p.state !== 'output-error'
+      ) {
+        hasInProgressClarify = true;
+      }
+    }
+    if (hasInProgressSetDoc) return 'applyingEdit';
+    if (hasInProgressClarify) return 'draftingQuestions';
+    return 'writing';
+  }, [status, messages]);
 
   const sendPrompt = useCallback(
     (text: string) => {
@@ -223,12 +270,77 @@ export function useDocumentChatSession({
     [busy, editorReady, sendMessage],
   );
 
+  /**
+   * Revert the editor to the exact HTML captured right before this tool call applied
+   * its `setDocumentHtml` output. Returns true when a snapshot existed and was applied.
+   */
+  const undoToolEdit = useCallback((toolCallId: string): boolean => {
+    const prev = preEditByToolIdRef.current.get(toolCallId);
+    const ed = editorRef.current;
+    if (prev === undefined || !ed) return false;
+    ed.chain().focus().setContent(prev, { emitUpdate: true }).run();
+    return true;
+  }, []);
+
+  /** Read the pre-apply HTML captured for a given tool call (undefined if unknown). */
+  const getPreEditHtml = useCallback(
+    (toolCallId: string): string | undefined => preEditByToolIdRef.current.get(toolCallId),
+    [],
+  );
+
+  /**
+   * Re-send the previous user turn. Used by the "Retry" affordance on the latest
+   * assistant message when the reply was unsatisfying or errored out.
+   */
+  const retryAssistant = useCallback(() => {
+    if (busy || !editorReady || awaitingPlanAnswers) return;
+    const msgs = messagesRef.current;
+    // Find the last user turn's concatenated text.
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if (m.role !== 'user') continue;
+      const texts: string[] = [];
+      for (const p of m.parts) {
+        if (p.type === 'text') texts.push(p.text);
+      }
+      const text = texts.join('\n').trim();
+      if (!text) return;
+      // Trim messages after and including this user turn so the stream rewrites cleanly.
+      setMessages(msgs.slice(0, i));
+      void sendMessage({ text });
+      return;
+    }
+  }, [awaitingPlanAnswers, busy, editorReady, sendMessage, setMessages]);
+
+  /**
+   * Pop the trailing assistant turn(s) after the last user turn and return the user
+   * text so the composer can load it for editing. No-op while busy.
+   */
+  const popLastUserMessageForEdit = useCallback((): string | null => {
+    if (busy || awaitingPlanAnswers) return null;
+    const msgs = messagesRef.current;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if (m.role !== 'user') continue;
+      const texts: string[] = [];
+      for (const p of m.parts) {
+        if (p.type === 'text') texts.push(p.text);
+      }
+      const text = texts.join('\n').trim();
+      if (!text) return null;
+      setMessages(msgs.slice(0, i));
+      return text;
+    }
+    return null;
+  }, [awaitingPlanAnswers, busy, setMessages]);
+
   return {
     messages,
     status,
     error,
     busy,
     awaitingPlanAnswers,
+    streamingPhase,
     chatMode,
     setChatMode,
     planDepthSelection,
@@ -239,6 +351,10 @@ export function useDocumentChatSession({
     persistChatModel,
     sendPrompt,
     sendPlanAnswers,
+    retryAssistant,
+    popLastUserMessageForEdit,
+    undoToolEdit,
+    getPreEditHtml,
     stop,
   };
 }
