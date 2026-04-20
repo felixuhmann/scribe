@@ -7,7 +7,12 @@ import {
   type DocumentChatUIMessage,
 } from '../lib/agents/document-chat-agent';
 import { documentChatTools } from '../lib/agents/document-chat-tools';
-import { shouldForcePlanClarificationRound } from '../lib/plan-clarification-gate';
+import {
+  clampPlanRefinementRounds,
+  countPlanAnswerMessages,
+  shouldForcePlanClarificationRound,
+  type PlanDepthMode,
+} from '../lib/plan-clarification-gate';
 import { readStoredSettings, resolveOpenAiApiKey } from './settings-store';
 
 const DOCUMENT_CHAT_MAX_OUTPUT_TOKENS = 8192;
@@ -43,8 +48,21 @@ export async function runDocumentChatSession(options: {
   documentHtml: string;
   documentChangeSummary?: string;
   chatMode?: DocumentChatMode;
+  /** Plan mode: how many clarification Q&A rounds before final HTML (default 1). Ignored when planDepthMode is auto. */
+  planRefinementRounds?: number;
+  /** Plan mode: fixed round count vs model decides (auto). */
+  planDepthMode?: PlanDepthMode;
 }): Promise<void> {
-  const { webContents, requestId, messages, documentHtml, documentChangeSummary, chatMode } = options;
+  const {
+    webContents,
+    requestId,
+    messages,
+    documentHtml,
+    documentChangeSummary,
+    chatMode,
+    planRefinementRounds: planRefinementRoundsOpt,
+    planDepthMode: planDepthModeOpt,
+  } = options;
 
   const prev = abortControllers.get(requestId);
   prev?.abort();
@@ -65,6 +83,9 @@ export async function runDocumentChatSession(options: {
   }
 
   const mode = chatMode ?? 'edit';
+  const planDepthMode: PlanDepthMode = planDepthModeOpt ?? 'fixed';
+  const planRefinementRounds = clampPlanRefinementRounds(planRefinementRoundsOpt);
+  const planAnswerCount = mode === 'plan' ? countPlanAnswerMessages(messages) : 0;
 
   try {
     const agent = createDocumentChatAgent({
@@ -72,10 +93,15 @@ export async function runDocumentChatSession(options: {
       modelId: stored.model,
       maxOutputTokens: DOCUMENT_CHAT_MAX_OUTPUT_TOKENS,
       mode,
+      planDepthMode: mode === 'plan' ? planDepthMode : undefined,
     });
 
     const planForceRequestClarifications =
-      mode === 'plan' && shouldForcePlanClarificationRound(messages, mode);
+      mode === 'plan' &&
+      shouldForcePlanClarificationRound(messages, mode, {
+        planDepthMode,
+        planRefinementRounds,
+      });
 
     // Always validate / convert with the full tool set so sessions that used plan mode
     // (requestClarifications in history) still validate after switching to edit mode.
@@ -94,6 +120,9 @@ export async function runDocumentChatSession(options: {
         documentHtml,
         documentChangeSummary,
         planForceRequestClarifications,
+        planRefinementRounds,
+        planAnswerCount,
+        planDepthMode,
       },
       abortSignal: controller.signal,
     });

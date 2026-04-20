@@ -7,6 +7,10 @@ export type ElectronIpcChatTransportOptions = {
   onStreamComplete?: (info: { error?: Error }) => void;
   /** Controls whether the main-process agent can ask clarification questions (plan) or only edit (edit). */
   getChatMode?: () => 'edit' | 'plan';
+  /** Plan mode: number of clarification Q&A rounds (1–8). Used when depth is fixed. */
+  getPlanRefinementRounds?: () => number;
+  /** Plan mode: `auto` lets the model choose when to clarify vs write; `fixed` uses a round count. */
+  getPlanDepthMode?: () => 'fixed' | 'auto';
 };
 
 /**
@@ -37,6 +41,8 @@ export class ElectronIpcChatTransport<UI_MESSAGE extends UIMessage>
           documentHtml: ctx.html,
           documentChangeSummary: ctx.documentChangeSummary,
           chatMode: this.opts.getChatMode?.(),
+          planRefinementRounds: this.opts.getPlanRefinementRounds?.(),
+          planDepthMode: this.opts.getPlanDepthMode?.(),
           onChunk: (chunk) => {
             controller.enqueue(chunk as UIMessageChunk);
           },

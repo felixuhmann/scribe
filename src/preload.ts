@@ -56,6 +56,8 @@ contextBridge.exposeInMainWorld('scribe', {
     documentHtml: string;
     documentChangeSummary?: string;
     chatMode?: 'edit' | 'plan';
+    planRefinementRounds?: number;
+    planDepthMode?: 'fixed' | 'auto';
     onChunk: (chunk: unknown) => void;
     onFinished: (error?: Error) => void;
   }): (() => void) => {
@@ -94,6 +96,8 @@ contextBridge.exposeInMainWorld('scribe', {
       documentHtml: params.documentHtml,
       documentChangeSummary: params.documentChangeSummary,
       chatMode: params.chatMode,
+      planRefinementRounds: params.planRefinementRounds,
+      planDepthMode: params.planDepthMode,
     });
 
     return () => {

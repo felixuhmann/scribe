@@ -128,6 +128,17 @@ function DocumentChatSessionView({
   const chatModeRef = useRef(chatMode);
   chatModeRef.current = chatMode;
 
+  /**
+   * Plan mode depth: `auto` = model decides when to clarify vs write (extra rounds if scope changes);
+   * `1`–`8` = fixed number of structured answer rounds before applying the document.
+   */
+  const [planDepthSelection, setPlanDepthSelection] = useState<string>('1');
+  const planDepthSelectionRef = useRef(planDepthSelection);
+  planDepthSelectionRef.current = planDepthSelection;
+  const planDepthIsAuto = planDepthSelection === 'auto';
+  const planRefinementRounds =
+    planDepthIsAuto ? 1 : Math.min(8, Math.max(1, Number.parseInt(planDepthSelection, 10) || 1));
+
   const [chatModel, setChatModel] = useState<string>(OPENAI_MODELS[1].id);
 
   useEffect(() => {
@@ -173,6 +184,12 @@ function DocumentChatSessionView({
         getDocumentContext,
         onStreamComplete,
         getChatMode: () => chatModeRef.current,
+        getPlanDepthMode: () => (planDepthSelectionRef.current === 'auto' ? 'auto' : 'fixed'),
+        getPlanRefinementRounds: () => {
+          const v = planDepthSelectionRef.current;
+          if (v === 'auto') return 1;
+          return Math.min(8, Math.max(1, Number.parseInt(v, 10) || 1));
+        },
       }),
     [getDocumentContext, onStreamComplete],
   );
@@ -286,7 +303,9 @@ function DocumentChatSessionView({
         ) : messages.length === 0 ? (
           <p className="text-muted-foreground text-xs">
             {chatMode === 'plan'
-              ? 'Describe what you want in the document. Plan mode will ask a few quick questions with suggested answers before applying changes.'
+              ? planDepthIsAuto
+                ? 'Describe what you want in the document. Plan (Auto) lets the assistant ask questions until it has enough context to write well, and ask again if you change scope or add constraints.'
+                : `Describe what you want in the document. Plan mode runs ${planRefinementRounds} clarification round${planRefinementRounds === 1 ? '' : 's'} (each round asks more specific questions), then applies changes.`
               : 'Ask about this document or request edits. The assistant can replace the full document when you want changes applied.'}
           </p>
         ) : (
@@ -395,7 +414,9 @@ function DocumentChatSessionView({
               : awaitingPlanAnswers
                 ? 'Use the plan answers above, then the assistant will continue…'
                 : chatMode === 'plan'
-                  ? 'What should we create or change? Plan mode will ask follow-ups first…'
+                  ? planDepthIsAuto
+                    ? 'What should we create or change? Plan (Auto) will ask as many question rounds as it needs, then apply changes…'
+                    : `What should we create or change? Plan mode will ask up to ${planRefinementRounds} rounds of questions…`
                   : 'Message about this document…'
           }
           disabled={!editorReady || busy || awaitingPlanAnswers}
@@ -427,6 +448,30 @@ function DocumentChatSessionView({
                 <option value="edit">Edit</option>
                 <option value="plan">Plan</option>
               </select>
+              {chatMode === 'plan' ? (
+                <label className="flex items-center gap-1">
+                  <span className="sr-only">Plan refinement rounds</span>
+                  <span className="text-muted-foreground whitespace-nowrap text-[10px] uppercase">
+                    Depth
+                  </span>
+                  <select
+                    id="scribe-plan-depth"
+                    aria-label="Plan depth"
+                    title="Auto: assistant chooses when to clarify vs write. Fixed numbers: that many structured Q&A rounds before applying the document."
+                    className="border-input bg-background ring-offset-background focus-visible:ring-ring h-8 min-w-[4.25rem] rounded-md border px-1 text-xs shadow-xs focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                    value={planDepthSelection}
+                    disabled={busy || awaitingPlanAnswers}
+                    onChange={(e) => setPlanDepthSelection(e.target.value)}
+                  >
+                    <option value="auto">Auto</option>
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+                      <option key={n} value={String(n)}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
             </div>
             <select
               id="scribe-chat-model"

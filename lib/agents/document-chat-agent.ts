@@ -6,7 +6,10 @@ import {
   type LanguageModel,
 } from 'ai';
 
+import type { PlanDepthMode } from '../plan-clarification-gate';
 import { documentChatTools } from './document-chat-tools';
+
+export type { PlanDepthMode };
 
 export type DocumentChatMode = 'edit' | 'plan';
 
@@ -24,6 +27,12 @@ export type DocumentChatCallOptions = {
    * Set from IPC using the same rules as the former forced clarification round.
    */
   planForceRequestClarifications?: boolean;
+  /** Configured plan depth (total Q&A rounds). */
+  planRefinementRounds?: number;
+  /** How many `[SCRIBE_PLAN_ANSWERS]` user messages are in this thread. */
+  planAnswerCount?: number;
+  /** Matches the session's plan depth setting (fixed rounds vs model-led). */
+  planDepthMode?: PlanDepthMode;
 };
 
 /** Model reference used only for typing message/tool unions */
@@ -56,18 +65,36 @@ HTML rules:
 - Output clean HTML fragments only (no <!DOCTYPE>, no html/body wrappers).
 - Prefer existing structure where possible unless restructuring was requested.`;
 
-const PLAN_MODE_INSTRUCTIONS = `PLAN MODE is active (CHAT_MODE: plan). Clarification is mandatory for this product—do not treat it as optional.
+const PLAN_MODE_INSTRUCTIONS_FIXED = `PLAN MODE is active (CHAT_MODE: plan). Clarification is mandatory for this product—do not treat it as optional.
+
+The PLAN_REFINEMENT_DEPTH block in your instructions states the configured number of Q&A rounds, which question round you are on, and how many plan-answer messages the user has already submitted. Follow it closely.
 
 Hard rules:
-1) If the user wants new writing in the document—email, letter, post, notes, report, rewrite, or any composed text you would put in the editor—you MUST call the tool requestClarifications in your FIRST step before setDocumentHtml and before supplying document-ready prose.
-2) Until the user has sent at least one message whose text starts with [SCRIBE_PLAN_ANSWERS], you MUST NOT: call setDocumentHtml; paste or write full drafts, sample emails, letter bodies, or other ready-to-paste content in your visible assistant message. One short sentence (e.g. that you will ask a few questions) is OK; a full draft is NOT.
-3) After each [SCRIBE_PLAN_ANSWERS] reply, either call requestClarifications again if something important is still unknown, or call setDocumentHtml with the final HTML. Only skip a second clarification round when their answers already fully specify tone, length, audience, and format.
+1) If the user wants new writing in the document—email, letter, post, notes, report, rewrite, or any composed text you would put in the editor—you MUST call the tool requestClarifications in your FIRST step before setDocumentHtml and before supplying document-ready prose—until PLAN_REFINEMENT_DEPTH says all configured rounds are complete.
+2) Until the user has submitted enough [SCRIBE_PLAN_ANSWERS] messages for the configured round count, you MUST NOT: call setDocumentHtml; paste or write full drafts, sample emails, letter bodies, or other ready-to-paste content in your visible assistant message. One short sentence (e.g. that you will ask a few questions) is OK; a full draft is NOT.
+3) Refinement rounds must increase in specificity: round 1 asks broad goals, audience, and shape; later rounds ask tighter follow-ups (edge cases, wording preferences, structure details) based on prior answers. After the final configured round of answers, call setDocumentHtml with the final HTML.
 
 requestClarifications tool usage:
 - Call it with 1–6 questions. Each needs a clear prompt and exactly three distinct short option strings (ids q1, q2, … are assigned for you). The UI adds a fourth "custom" field per question—do not add a fake fourth option in the tool.
-- Questions should cover what you need for a solid result (e.g. formality, channel email vs Slack, how much detail, tone, urgency).
+- Tailor depth to the current round (see PLAN_REFINEMENT_DEPTH).
 
 The only narrow exception to calling requestClarifications first: the user is purely asking about text already in CURRENT_DOCUMENT_HTML (summarize, explain, critique) with no request to compose or change the document. In that case answer in text only and do not use setDocumentHtml unless they ask to apply edits later.
+
+User answers after clarifications look like: [SCRIBE_PLAN_ANSWERS] then JSON with "answers" (optionIndex 0–2 or "custom" per id) and optional "summaryLines".`;
+
+const PLAN_MODE_INSTRUCTIONS_AUTO = `PLAN MODE is active (CHAT_MODE: plan) with ADAPTIVE DEPTH (AUTO). There is no fixed number of clarification rounds—you judge when you have enough context to produce a satisfactory document.
+
+Follow PLAN_REFINEMENT_DEPTH for the running summary of structured answers so far.
+
+Principles:
+1) New writing (email, letter, post, report, etc.): usually call requestClarifications first unless the user's message is already a complete brief (audience, channel/format, approximate length, tone, and main points). If anything material is still unknown, clarify before setDocumentHtml.
+2) You may call setDocumentHtml as soon as you can write text that matches the request with acceptable specificity—do not pad with extra rounds.
+3) Dynamic scope: if the user (in chat or via [SCRIBE_PLAN_ANSWERS]) adds requirements, contradicts earlier choices, narrows/widens scope, or introduces a new constraint, treat that as a new decision point: call requestClarifications again if you need structured choices, or ask one targeted question in chat if enough. Never lock yourself to a prior plan when the request has materially changed.
+4) Until you call setDocumentHtml: do not paste full drafts or ready-to-send bodies in visible chat—short acknowledgments are OK.
+
+requestClarifications: 1–6 questions, three short options each (UI adds custom text per question).
+
+The narrow exception: user only wants analysis of existing CURRENT_DOCUMENT_HTML with no composition—reply in text; use setDocumentHtml only if they ask to apply edits.
 
 User answers after clarifications look like: [SCRIBE_PLAN_ANSWERS] then JSON with "answers" (optionIndex 0–2 or "custom" per id) and optional "summaryLines".`;
 
@@ -76,11 +103,16 @@ export function createDocumentChatAgent(options: {
   modelId: string;
   maxOutputTokens: number;
   mode: DocumentChatMode;
+  /** Plan mode only. Default fixed (mandatory rounds per depth setting). */
+  planDepthMode?: PlanDepthMode;
 }): DocumentChatAgentInstance {
   const openai = createOpenAI({ apiKey: options.apiKey });
   const model: LanguageModel = openai(options.modelId);
+  const planDepthMode = options.planDepthMode ?? 'fixed';
+  const planInstructions =
+    planDepthMode === 'auto' ? PLAN_MODE_INSTRUCTIONS_AUTO : PLAN_MODE_INSTRUCTIONS_FIXED;
   const instructions =
-    options.mode === 'plan' ? `${BASE_INSTRUCTIONS}\n\n${PLAN_MODE_INSTRUCTIONS}` : BASE_INSTRUCTIONS;
+    options.mode === 'plan' ? `${BASE_INSTRUCTIONS}\n\n${planInstructions}` : BASE_INSTRUCTIONS;
 
   const prepareCall = (args: Record<string, unknown>) => {
     const inst = args.instructions;
@@ -94,13 +126,40 @@ export function createDocumentChatAgent(options: {
         : '';
     const modeLine = `\n\nCHAT_MODE: ${options.mode}`;
     const planForce = docOpts?.planForceRequestClarifications === true;
+    const depthMode = docOpts?.planDepthMode ?? planDepthMode;
+    const totalRounds = docOpts?.planRefinementRounds ?? 1;
+    const answerCount = docOpts?.planAnswerCount ?? 0;
+    const planDepthBlock =
+      options.mode === 'plan'
+        ? depthMode === 'auto'
+          ? `\n\nPLAN_REFINEMENT_DEPTH (AUTO — adaptive):
+- User [SCRIBE_PLAN_ANSWERS] submissions so far: ${answerCount}.
+- No fixed round quota: you decide when context is sufficient to call setDocumentHtml. Prefer clarifying when material details are missing; do not add rounds for their own sake.
+- If the latest user message (text or structured answers) materially changes scope, audience, format, tone, or constraints, reassess: call requestClarifications again for a new structured pass, or ask a brief follow-up in chat.
+- Each clarification pass can go broader or deeper as fits the situation; later passes often narrow in, but a scope pivot may require fresh high-level questions.`
+          : `\n\nPLAN_REFINEMENT_DEPTH (FIXED):
+- Configured refinement rounds (Q&A cycles): ${totalRounds}.
+- User [SCRIBE_PLAN_ANSWERS] submissions so far: ${answerCount}.
+- This turn's clarification round index (1-based): ${Math.min(answerCount + 1, totalRounds)}.
+${
+  answerCount >= totalRounds
+    ? '- All configured refinement rounds are complete. Call setDocumentHtml with the final HTML for the writing task. Do not call requestClarifications unless the narrow "only analyzing existing doc" exception applies.'
+    : `- Ask questions appropriate for round ${answerCount + 1} of ${totalRounds}: ${
+        answerCount === 0
+          ? 'stay broad (goal, audience, format, length band).'
+          : answerCount + 1 >= totalRounds
+            ? 'this is the last planned round—cover any remaining specifics needed before writing (edge cases, tone tweaks, must-haves).'
+            : 'go deeper than before—narrower follow-ups based on what they already chose.'
+      }`
+}`
+        : '';
     const prevCtx =
       args.experimental_context != null && typeof args.experimental_context === 'object'
         ? (args.experimental_context as Record<string, unknown>)
         : {};
     return {
       ...args,
-      instructions: `${base}${modeLine}\n\nCURRENT_DOCUMENT_HTML:\n"""${doc}"""${deltaBlock}`,
+      instructions: `${base}${modeLine}${planDepthBlock}\n\nCURRENT_DOCUMENT_HTML:\n"""${doc}"""${deltaBlock}`,
       experimental_context: {
         ...prevCtx,
         planForceRequestClarifications: planForce,

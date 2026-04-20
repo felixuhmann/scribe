@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 /** Minimum sidebar width when open; drag cannot go narrower (use collapse to hide). */
 export const SIDEBAR_MIN_WIDTH_PX = 280;
 
-const DEFAULT_SIDEBAR_WIDTH_PX = 300;
+const DEFAULT_SIDEBAR_WIDTH_PX = 600;
 
 function DesktopSplit({
   sidebarWidthPx,

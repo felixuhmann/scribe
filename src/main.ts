@@ -361,6 +361,8 @@ ipcMain.on(
       documentHtml: string;
       documentChangeSummary?: string;
       chatMode?: 'edit' | 'plan';
+      planRefinementRounds?: number;
+      planDepthMode?: 'fixed' | 'auto';
     },
   ) => {
     void runDocumentChatSession({
@@ -370,6 +372,8 @@ ipcMain.on(
       documentHtml: payload.documentHtml,
       documentChangeSummary: payload.documentChangeSummary,
       chatMode: payload.chatMode,
+      planRefinementRounds: payload.planRefinementRounds,
+      planDepthMode: payload.planDepthMode,
     });
   },
 );

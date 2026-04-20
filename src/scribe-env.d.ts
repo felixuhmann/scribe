@@ -46,6 +46,8 @@ declare global {
         documentHtml: string;
         documentChangeSummary?: string;
         chatMode?: 'edit' | 'plan';
+        planRefinementRounds?: number;
+        planDepthMode?: 'fixed' | 'auto';
         onChunk: (chunk: unknown) => void;
         onFinished: (error?: Error) => void;
       }) => () => void;
