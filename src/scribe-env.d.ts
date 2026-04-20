@@ -1,4 +1,8 @@
 import type {
+  DocumentChatChunkPayload,
+  DocumentChatStartPayload,
+} from './ipc/channels';
+import type {
   DocumentChatBundle,
   DocumentChatSessionMergePatch,
   ExportPdfResult,
@@ -42,13 +46,13 @@ declare global {
       saveMarkdownAs: (input: { markdown: string; defaultPath?: string }) => Promise<SaveMarkdownAsResult>;
       exportPdf: (input: { htmlBody: string; defaultPath?: string }) => Promise<ExportPdfResult>;
       documentChatStream: (params: {
-        messages: unknown[];
+        messages: DocumentChatStartPayload['messages'];
         documentHtml: string;
         documentChangeSummary?: string;
-        chatMode?: 'edit' | 'plan';
+        chatMode?: DocumentChatStartPayload['chatMode'];
         planRefinementRounds?: number;
-        planDepthMode?: 'fixed' | 'auto';
-        onChunk: (chunk: unknown) => void;
+        planDepthMode?: DocumentChatStartPayload['planDepthMode'];
+        onChunk: (chunk: DocumentChatChunkPayload['chunk']) => void;
         onFinished: (error?: Error) => void;
       }) => () => void;
     };

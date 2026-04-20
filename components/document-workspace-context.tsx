@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { recordRecentDiskPath } from '@/lib/recent-disk-files';
+import { recordRecentDiskPath } from '@/components/document-workspace/recent-disk-files';
 
 const STORAGE_KEY = 'scribe.documentKey';
 const FOLDER_STORAGE_KEY = 'scribe.openedFolderPath';

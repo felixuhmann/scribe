@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 
-import { ANTHROPIC_MODELS, KNOWN_CHAT_MODEL_IDS, OPENAI_MODELS } from '@/lib/chat-models';
+import { ChatModelSelect } from '@/components/document-chat/chat-model-select';
 import type { ScribeSetSettingsInput, ScribeSettingsPublic } from '@/src/scribe-ipc-types';
 
 function openAiKeyStatusLine(settings: ScribeSettingsPublic | null): string {
@@ -236,28 +236,12 @@ export function SettingsDialog({
 
             <div className="flex flex-col gap-2">
               <Label htmlFor={modelId}>Model</Label>
-              <select
+              <ChatModelSelect
                 id={modelId}
                 className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm shadow-xs focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
                 value={model}
-                onChange={(e) => setModel(e.target.value)}
-              >
-                {!KNOWN_CHAT_MODEL_IDS.has(model) ? <option value={model}>{model}</option> : null}
-                <optgroup label="OpenAI">
-                  {OPENAI_MODELS.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="Anthropic">
-                  {ANTHROPIC_MODELS.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
+                onChange={setModel}
+              />
               <p className="text-muted-foreground text-xs">
                 Pick a model your account can use. OpenAI models need an OpenAI key; Claude models need an Anthropic
                 key. The same choice is used for document chat, tab autocomplete, and quick edit.

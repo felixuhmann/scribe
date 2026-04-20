@@ -7,7 +7,7 @@ import type {
   DocumentChatBundle,
   DocumentChatSessionMergePatch,
   StoredChatSession,
-} from './scribe-ipc-types';
+} from '../../scribe-ipc-types';
 
 const FILE_NAME = 'scribe-document-chats.json';
 

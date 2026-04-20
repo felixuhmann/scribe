@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import type { PlanAnswerPayload } from '@/lib/plan-mode';
+import type { PlanAnswerPayload } from '@/lib/plan-answers-protocol';
 import { cn } from '@/lib/utils';
 
 export type ClarificationQuestion = {

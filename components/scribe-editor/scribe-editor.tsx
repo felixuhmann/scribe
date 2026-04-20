@@ -5,7 +5,7 @@ import { Tiptap, useEditor } from '@tiptap/react';
 import { useDocumentWorkspace } from '@/components/document-workspace-context';
 import { useEditorSession } from '@/components/editor-session-context';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { TabAutocomplete } from '@/lib/tiptap-tab-autocomplete-extension';
+import { TabAutocomplete } from '@/components/scribe-editor/tiptap-tab-autocomplete-extension';
 
 import { AUTOCOMPLETE_DEBOUNCE_MS, DEFAULT_DOC, EDITOR_EXTENSIONS } from './constants';
 import { EditorFormattingToolbar } from './editor-formatting-toolbar';

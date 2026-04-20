@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+import {
+  channels,
+  type DocumentChatChunkPayload,
+  type DocumentChatEndPayload,
+  type DocumentChatStartPayload,
+} from './ipc/channels';
 import type {
   DocumentChatBundle,
   DocumentChatSessionMergePatch,
@@ -18,79 +24,67 @@ import type {
 
 contextBridge.exposeInMainWorld('scribe', {
   autocompleteSuggest: (input: { before: string; after: string }): Promise<ScribeAutocompleteResult> =>
-    ipcRenderer.invoke('scribe:autocomplete', input),
+    ipcRenderer.invoke(channels.autocomplete.name, input),
   quickEditSelection: (input: {
     selectedText: string;
     instruction: string;
-  }): Promise<ScribeQuickEditResult> => ipcRenderer.invoke('scribe:quickEditSelection', input),
-  getSettings: (): Promise<ScribeSettingsPublic> => ipcRenderer.invoke('scribe:getSettings'),
+  }): Promise<ScribeQuickEditResult> => ipcRenderer.invoke(channels.quickEditSelection.name, input),
+  getSettings: (): Promise<ScribeSettingsPublic> => ipcRenderer.invoke(channels.getSettings.name),
   setSettings: (patch: ScribeSetSettingsInput): Promise<ScribeSettingsPublic> =>
-    ipcRenderer.invoke('scribe:setSettings', patch),
+    ipcRenderer.invoke(channels.setSettings.name, patch),
   getDocumentChatBundle: (documentKey: string): Promise<DocumentChatBundle> =>
-    ipcRenderer.invoke('scribe:getDocumentChatBundle', documentKey),
+    ipcRenderer.invoke(channels.getDocumentChatBundle.name, documentKey),
   saveDocumentChatBundle: (documentKey: string, bundle: DocumentChatBundle): Promise<void> =>
-    ipcRenderer.invoke('scribe:saveDocumentChatBundle', { documentKey, bundle }),
+    ipcRenderer.invoke(channels.saveDocumentChatBundle.name, { documentKey, bundle }),
   mergeDocumentChatSession: (
     documentKey: string,
     sessionId: string,
     patch: DocumentChatSessionMergePatch,
   ): Promise<void> =>
-    ipcRenderer.invoke('scribe:mergeDocumentChatSession', { documentKey, sessionId, patch }),
-  openDocument: (): Promise<OpenDocumentResult> => ipcRenderer.invoke('scribe:openDocument'),
+    ipcRenderer.invoke(channels.mergeDocumentChatSession.name, { documentKey, sessionId, patch }),
+  openDocument: (): Promise<OpenDocumentResult> => ipcRenderer.invoke(channels.openDocument.name),
   openDocumentAtPath: (filePath: string): Promise<OpenDocumentResult> =>
-    ipcRenderer.invoke('scribe:openDocumentAtPath', { path: filePath }),
+    ipcRenderer.invoke(channels.openDocumentAtPath.name, { path: filePath }),
   listExplorerFolder: (rootPath: string): Promise<ListExplorerFolderResult> =>
-    ipcRenderer.invoke('scribe:listExplorerFolder', { rootPath }),
+    ipcRenderer.invoke(channels.listExplorerFolder.name, { rootPath }),
   saveHtmlToPath: (filePath: string, htmlBody: string): Promise<SaveHtmlToPathResult> =>
-    ipcRenderer.invoke('scribe:saveHtmlToPath', { path: filePath, htmlBody }),
+    ipcRenderer.invoke(channels.saveHtmlToPath.name, { path: filePath, htmlBody }),
   saveHtmlAs: (input: { htmlBody: string; defaultPath?: string }): Promise<SaveHtmlAsResult> =>
-    ipcRenderer.invoke('scribe:saveHtmlAs', input),
+    ipcRenderer.invoke(channels.saveHtmlAs.name, input),
   saveMarkdownToPath: (filePath: string, markdown: string): Promise<SaveMarkdownToPathResult> =>
-    ipcRenderer.invoke('scribe:saveMarkdownToPath', { path: filePath, markdown }),
+    ipcRenderer.invoke(channels.saveMarkdownToPath.name, { path: filePath, markdown }),
   saveMarkdownAs: (input: { markdown: string; defaultPath?: string }): Promise<SaveMarkdownAsResult> =>
-    ipcRenderer.invoke('scribe:saveMarkdownAs', input),
+    ipcRenderer.invoke(channels.saveMarkdownAs.name, input),
   exportPdf: (input: { htmlBody: string; defaultPath?: string }): Promise<ExportPdfResult> =>
-    ipcRenderer.invoke('scribe:exportPdf', input),
+    ipcRenderer.invoke(channels.exportPdf.name, input),
   documentChatStream: (params: {
-    messages: unknown[];
+    messages: DocumentChatStartPayload['messages'];
     documentHtml: string;
     documentChangeSummary?: string;
-    chatMode?: 'edit' | 'plan';
+    chatMode?: DocumentChatStartPayload['chatMode'];
     planRefinementRounds?: number;
-    planDepthMode?: 'fixed' | 'auto';
-    onChunk: (chunk: unknown) => void;
+    planDepthMode?: DocumentChatStartPayload['planDepthMode'];
+    onChunk: (chunk: DocumentChatChunkPayload['chunk']) => void;
     onFinished: (error?: Error) => void;
   }): (() => void) => {
     const id = crypto.randomUUID();
 
-    const onChunk = (
-      _: unknown,
-      payload: {
-        id: string;
-        chunk: unknown;
-      },
-    ) => {
+    const onChunk = (_: unknown, payload: DocumentChatChunkPayload) => {
       if (payload.id !== id) return;
       params.onChunk(payload.chunk);
     };
 
-    const onEnd = (
-      _: unknown,
-      payload: {
-        id: string;
-        error?: string;
-      },
-    ) => {
+    const onEnd = (_: unknown, payload: DocumentChatEndPayload) => {
       if (payload.id !== id) return;
-      ipcRenderer.removeListener('scribe:documentChat:chunk', onChunk);
-      ipcRenderer.removeListener('scribe:documentChat:end', onEnd);
+      ipcRenderer.removeListener(channels.documentChatChunk.name, onChunk);
+      ipcRenderer.removeListener(channels.documentChatEnd.name, onEnd);
       params.onFinished(payload.error ? new Error(payload.error) : undefined);
     };
 
-    ipcRenderer.on('scribe:documentChat:chunk', onChunk);
-    ipcRenderer.on('scribe:documentChat:end', onEnd);
+    ipcRenderer.on(channels.documentChatChunk.name, onChunk);
+    ipcRenderer.on(channels.documentChatEnd.name, onEnd);
 
-    ipcRenderer.send('scribe:documentChat:start', {
+    const startPayload: DocumentChatStartPayload = {
       id,
       messages: params.messages,
       documentHtml: params.documentHtml,
@@ -98,10 +92,11 @@ contextBridge.exposeInMainWorld('scribe', {
       chatMode: params.chatMode,
       planRefinementRounds: params.planRefinementRounds,
       planDepthMode: params.planDepthMode,
-    });
+    };
+    ipcRenderer.send(channels.documentChatStart.name, startPayload);
 
     return () => {
-      ipcRenderer.send('scribe:documentChat:abort', { id });
+      ipcRenderer.send(channels.documentChatAbort.name, { id });
     };
   },
 });

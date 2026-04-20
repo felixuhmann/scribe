@@ -5,8 +5,12 @@ import {
   useDocumentWorkspace,
 } from '@/components/document-workspace-context';
 import { useEditorSession } from '@/components/editor-session-context';
-import { formatMarkdownFidelityPrompt, getMarkdownFidelityWarnings } from '@/lib/markdown-fidelity';
-import { editorHtmlToMarkdown, markdownToEditorHtml } from '@/lib/markdown-io';
+import { formatMarkdownFidelityPrompt, getMarkdownFidelityWarnings } from '@/components/scribe-editor/markdown-fidelity';
+import {
+  editorHtmlToMarkdown,
+  localFileToEditorHtml,
+  openDocumentResultToEditorHtml,
+} from '@/lib/markdown/markdown-io';
 import { LinkDialog } from './link-dialog';
 import { EditorMenubar } from './editor-menubar';
 import { SettingsDialog } from './settings-dialog';
@@ -52,9 +56,11 @@ export function ScribeEditorChrome() {
       const result = await api();
       if (!result.ok) return;
       notifyOpenedFromDisk(result.path);
-      const html =
-        result.format === 'markdown' ? markdownToEditorHtml(result.text) : result.text;
-      editor.chain().focus().setContent(html, { emitUpdate: true }).run();
+      editor
+        .chain()
+        .focus()
+        .setContent(openDocumentResultToEditorHtml(result), { emitUpdate: true })
+        .run();
       return;
     }
     openFilePicker();
@@ -66,12 +72,11 @@ export function ScribeEditorChrome() {
     if (!file || !editor) return;
     void file.text().then((text) => {
       notifyOpenedLocalFile(file);
-      const lower = file.name.toLowerCase();
-      const html =
-        lower.endsWith('.md') || lower.endsWith('.markdown')
-          ? markdownToEditorHtml(text)
-          : text;
-      editor.chain().focus().setContent(html, { emitUpdate: true }).run();
+      editor
+        .chain()
+        .focus()
+        .setContent(localFileToEditorHtml(file.name, text), { emitUpdate: true })
+        .run();
     });
   };
 
@@ -258,9 +263,11 @@ export function ScribeEditorChrome() {
       const result = await api(absolutePath);
       if (!result.ok) return;
       notifyOpenedFromDisk(result.path);
-      const html =
-        result.format === 'markdown' ? markdownToEditorHtml(result.text) : result.text;
-      editor.chain().focus().setContent(html, { emitUpdate: true }).run();
+      editor
+        .chain()
+        .focus()
+        .setContent(openDocumentResultToEditorHtml(result), { emitUpdate: true })
+        .run();
     });
   }, [editor, notifyOpenedFromDisk, registerOpenDocumentFromDiskHandler]);
 

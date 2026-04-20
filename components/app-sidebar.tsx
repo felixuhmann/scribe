@@ -1,6 +1,6 @@
 import { Files, MessageSquare } from 'lucide-react';
 
-import { DocumentChatPanel } from '@/components/document-chat-panel';
+import { DocumentChatPanel } from '@/components/document-chat/document-chat-panel';
 import { SidebarFileExplorer } from '@/components/sidebar-file-explorer';
 import { Sidebar, SidebarContent, SidebarHeader } from '@/components/ui/sidebar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';

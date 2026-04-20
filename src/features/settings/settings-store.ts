@@ -2,7 +2,7 @@ import { app } from 'electron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import type { ScribeSettingsPublic, ScribeSetSettingsInput, ScribeStoredSettings } from './scribe-ipc-types';
+import type { ScribeSettingsPublic, ScribeSetSettingsInput, ScribeStoredSettings } from '../../scribe-ipc-types';
 
 const FILE_NAME = 'scribe-settings.json';
 
@@ -162,4 +162,11 @@ export function resolveApiKeyForProvider(
   provider: 'openai' | 'anthropic',
 ): string | null {
   return provider === 'anthropic' ? resolveAnthropicApiKey(stored) : resolveOpenAiApiKey(stored);
+}
+
+/** User-facing error when a provider has no key in storage or env. */
+export function missingApiKeyErrorMessage(provider: 'openai' | 'anthropic'): string {
+  return provider === 'anthropic'
+    ? 'No Anthropic API key found. Add ANTHROPIC_API_KEY to a .env file, or set a key in Settings.'
+    : 'No OpenAI API key found. Add OPENAI_API_KEY to a .env file, or set a key in Settings.';
 }

@@ -7,8 +7,11 @@ import {
   readRecentDiskPaths,
   removeRecentDiskPath,
   subscribeRecentDiskPaths,
-} from '@/lib/recent-disk-files';
-import { markdownToEditorHtml } from '@/lib/markdown-io';
+} from '@/components/document-workspace/recent-disk-files';
+import {
+  localFileToEditorHtml,
+  openDocumentResultToEditorHtml,
+} from '@/lib/markdown/markdown-io';
 
 export function StartWorkspaceScreen() {
   const { notifyOpenedFromDisk, notifyOpenedLocalFile } = useDocumentWorkspace();
@@ -30,9 +33,7 @@ export function StartWorkspaceScreen() {
     if (api) {
       const result = await api();
       if (!result.ok) return;
-      const html =
-        result.format === 'markdown' ? markdownToEditorHtml(result.text) : result.text;
-      notifyOpenedFromDisk(result.path, html);
+      notifyOpenedFromDisk(result.path, openDocumentResultToEditorHtml(result));
       return;
     }
     openFilePicker();
@@ -44,10 +45,7 @@ export function StartWorkspaceScreen() {
       e.target.value = '';
       if (!file) return;
       void file.text().then((text) => {
-        const lower = file.name.toLowerCase();
-        const html =
-          lower.endsWith('.md') || lower.endsWith('.markdown') ? markdownToEditorHtml(text) : text;
-        notifyOpenedLocalFile(file, html);
+        notifyOpenedLocalFile(file, localFileToEditorHtml(file.name, text));
       });
     },
     [notifyOpenedLocalFile],
@@ -66,9 +64,7 @@ export function StartWorkspaceScreen() {
           removeRecentDiskPath(absolutePath);
           return;
         }
-        const html =
-          result.format === 'markdown' ? markdownToEditorHtml(result.text) : result.text;
-        notifyOpenedFromDisk(result.path, html);
+        notifyOpenedFromDisk(result.path, openDocumentResultToEditorHtml(result));
       } finally {
         setOpeningPath(null);
       }

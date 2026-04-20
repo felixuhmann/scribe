@@ -2,19 +2,23 @@ import { convertToModelMessages, validateUIMessages, type UIMessageChunk } from 
 import type { WebContents } from 'electron';
 
 import {
-  createDocumentChatAgent,
-  type DocumentChatMode,
-  type DocumentChatUIMessage,
-} from '../lib/agents/document-chat-agent';
-import { documentChatTools } from '../lib/agents/document-chat-tools';
-import { getLlmProviderForModel } from '../lib/llm-provider';
-import {
   clampPlanRefinementRounds,
   countPlanAnswerMessages,
+  createDocumentChatAgent,
   shouldForcePlanClarificationRound,
+  type DocumentChatMode,
+  type DocumentChatUIMessage,
   type PlanDepthMode,
-} from '../lib/plan-clarification-gate';
-import { readStoredSettings, resolveApiKeyForProvider } from './settings-store';
+} from '../../../lib/agents/document-chat-agent';
+import { documentChatTools } from '../../../lib/agents/document-chat-tools';
+import { providerForModel } from '../../../lib/llm';
+import {
+  missingApiKeyErrorMessage,
+  readStoredSettings,
+  resolveApiKeyForProvider,
+} from '../settings/settings-store';
+import { channels } from '../../ipc/channels';
+import { sendEvent } from '../../ipc/main-register';
 
 const DOCUMENT_CHAT_MAX_OUTPUT_TOKENS = 8192;
 
@@ -72,15 +76,12 @@ export async function runDocumentChatSession(options: {
   abortControllers.set(requestId, controller);
 
   const stored = await readStoredSettings();
-  const provider = getLlmProviderForModel(stored.model);
+  const provider = providerForModel(stored.model);
   const apiKey = resolveApiKeyForProvider(stored, provider);
   if (!apiKey) {
-    webContents.send('scribe:documentChat:end', {
+    sendEvent(webContents, channels.documentChatEnd, {
       id: requestId,
-      error:
-        provider === 'anthropic'
-          ? 'No Anthropic API key found. Add ANTHROPIC_API_KEY to a .env file, or set a key in Settings.'
-          : 'No OpenAI API key found. Add OPENAI_API_KEY to a .env file, or set a key in Settings.',
+      error: missingApiKeyErrorMessage(provider),
     });
     abortControllers.delete(requestId);
     return;
@@ -133,20 +134,20 @@ export async function runDocumentChatSession(options: {
 
     for await (const chunk of uiChunksFromStream(stream.toUIMessageStream({ originalMessages: validatedMessages }))) {
       if (controller.signal.aborted) break;
-      webContents.send('scribe:documentChat:chunk', {
+      sendEvent(webContents, channels.documentChatChunk, {
         id: requestId,
         chunk,
       });
     }
 
     // Include abort `break` above: the renderer must always get `end` to close the stream.
-    webContents.send('scribe:documentChat:end', { id: requestId });
+    sendEvent(webContents, channels.documentChatEnd, { id: requestId });
   } catch (err) {
     if (controller.signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
-      webContents.send('scribe:documentChat:end', { id: requestId });
+      sendEvent(webContents, channels.documentChatEnd, { id: requestId });
     } else {
       const message = err instanceof Error ? err.message : 'Document chat failed';
-      webContents.send('scribe:documentChat:end', { id: requestId, error: message });
+      sendEvent(webContents, channels.documentChatEnd, { id: requestId, error: message });
     }
   } finally {
     abortControllers.delete(requestId);
