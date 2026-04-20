@@ -9,6 +9,11 @@ import {
   type ReactNode,
 } from 'react';
 
+import {
+  useEditorCanvasPreferences,
+  type CanvasPreferencesApi,
+} from '@/components/scribe-editor/use-editor-canvas-preferences';
+
 type EditorSessionValue = {
   editor: Editor | null;
   setEditor: (editor: Editor | null) => void;
@@ -27,6 +32,24 @@ type EditorSessionValue = {
   registerOpenDocumentFromDiskHandler: (
     handler: (absolutePath: string) => void | Promise<void>,
   ) => () => void;
+  /** Legacy formatting ribbon is hidden by default; toggled from the top bar / palette. */
+  isFormattingToolbarOpen: boolean;
+  setFormattingToolbarOpen: (open: boolean) => void;
+  toggleFormattingToolbar: () => void;
+  /** Command palette open state is owned here so any surface can invoke it. */
+  isCommandPaletteOpen: boolean;
+  setCommandPaletteOpen: (open: boolean) => void;
+  toggleCommandPalette: () => void;
+  /** Persisted canvas-view preferences (focus mode, typewriter, paper, zoom). */
+  canvas: CanvasPreferencesApi;
+  /**
+   * Tab autocomplete state — owned by the editor component, mirrored here so
+   * non-adjacent surfaces (command palette, settings) can read/toggle it.
+   */
+  autocompleteEnabled: boolean;
+  setAutocompleteState: (enabled: boolean) => void;
+  requestToggleAutocomplete: () => void;
+  registerToggleAutocompleteHandler: (handler: () => void | Promise<void>) => () => void;
 };
 
 const EditorSessionContext = createContext<EditorSessionValue | null>(null);
@@ -38,6 +61,12 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
   const openDocumentFromDiskHandlerRef = useRef<
     ((absolutePath: string) => void | Promise<void>) | null
   >(null);
+
+  const [isFormattingToolbarOpen, setFormattingToolbarOpen] = useState(false);
+  const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [autocompleteEnabled, setAutocompleteEnabled] = useState(true);
+  const toggleAutocompleteHandlerRef = useRef<(() => void | Promise<void>) | null>(null);
+  const canvas = useEditorCanvasPreferences();
 
   const setEditor = useCallback((next: Editor | null) => {
     setEditorState(next);
@@ -85,6 +114,32 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
     await openDocumentFromDiskHandlerRef.current?.(absolutePath);
   }, []);
 
+  const toggleFormattingToolbar = useCallback(
+    () => setFormattingToolbarOpen((v) => !v),
+    [],
+  );
+  const toggleCommandPalette = useCallback(() => setCommandPaletteOpen((v) => !v), []);
+
+  const registerToggleAutocompleteHandler = useCallback(
+    (handler: () => void | Promise<void>) => {
+      toggleAutocompleteHandlerRef.current = handler;
+      return () => {
+        if (toggleAutocompleteHandlerRef.current === handler) {
+          toggleAutocompleteHandlerRef.current = null;
+        }
+      };
+    },
+    [],
+  );
+
+  const requestToggleAutocomplete = useCallback(() => {
+    void toggleAutocompleteHandlerRef.current?.();
+  }, []);
+
+  const setAutocompleteState = useCallback((enabled: boolean) => {
+    setAutocompleteEnabled(enabled);
+  }, []);
+
   const value = useMemo(
     () => ({
       editor,
@@ -95,6 +150,17 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
       registerOpenLinkDialogHandler,
       requestOpenDocumentFromDisk,
       registerOpenDocumentFromDiskHandler,
+      isFormattingToolbarOpen,
+      setFormattingToolbarOpen,
+      toggleFormattingToolbar,
+      isCommandPaletteOpen,
+      setCommandPaletteOpen,
+      toggleCommandPalette,
+      canvas,
+      autocompleteEnabled,
+      setAutocompleteState,
+      requestToggleAutocomplete,
+      registerToggleAutocompleteHandler,
     }),
     [
       editor,
@@ -105,6 +171,15 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
       registerOpenLinkDialogHandler,
       requestOpenDocumentFromDisk,
       registerOpenDocumentFromDiskHandler,
+      isFormattingToolbarOpen,
+      toggleFormattingToolbar,
+      isCommandPaletteOpen,
+      toggleCommandPalette,
+      canvas,
+      autocompleteEnabled,
+      setAutocompleteState,
+      requestToggleAutocomplete,
+      registerToggleAutocompleteHandler,
     ],
   );
 

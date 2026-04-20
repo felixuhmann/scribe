@@ -98,3 +98,8 @@ export type SaveMarkdownAsResult =
 export type ExportPdfResult =
   | { ok: true; path: string }
   | { ok: false; cancelled?: true; error?: string };
+
+/** Rename a file on disk to a new basename inside the same directory. */
+export type RenameFileResult =
+  | { ok: true; path: string }
+  | { ok: false; error: string };

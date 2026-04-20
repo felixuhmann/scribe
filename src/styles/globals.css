@@ -44,12 +44,15 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --font-prose: var(--scribe-prose-font);
+  --font-sans:
+    'Inter', 'InterVariable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --radius: 0.75rem;
+  --background: oklch(0.995 0.002 264);
+  --foreground: oklch(0.14 0.015 264);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
@@ -59,7 +62,7 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: oklch(0.52 0.01 264);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
@@ -80,41 +83,62 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* Scribe document surface */
+  --scribe-prose-font:
+    'iA Writer Quattro', 'Charter', 'Source Serif 4', 'Iowan Old Style', 'Georgia', ui-serif, serif;
+  --scribe-prose-font-sans:
+    'Inter', 'InterVariable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --scribe-prose-font-mono:
+    'JetBrains Mono', 'Fira Code', 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
+  --scribe-prose-color: oklch(0.18 0.01 264);
+  --scribe-prose-muted: oklch(0.48 0.015 264);
+  --scribe-prose-accent: oklch(0.48 0.14 254);
+  --scribe-prose-rule: oklch(0.9 0.01 264);
+  --scribe-prose-surface: oklch(0.97 0.005 264);
+  --scribe-content-scale: 1;
+  --scribe-content-max: 44rem;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.14 0.01 264);
+  --foreground: oklch(0.96 0.005 264);
+  --card: oklch(0.18 0.012 264);
+  --card-foreground: oklch(0.96 0.005 264);
+  --popover: oklch(0.2 0.014 264);
+  --popover-foreground: oklch(0.96 0.005 264);
+  --primary: oklch(0.92 0.005 264);
+  --primary-foreground: oklch(0.2 0.01 264);
+  --secondary: oklch(0.25 0.012 264);
+  --secondary-foreground: oklch(0.96 0.005 264);
+  --muted: oklch(0.22 0.012 264);
+  --muted-foreground: oklch(0.68 0.012 264);
+  --accent: oklch(0.25 0.012 264);
+  --accent-foreground: oklch(0.96 0.005 264);
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.5 0 0);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar: oklch(0.16 0.012 264);
+  --sidebar-foreground: oklch(0.96 0.005 264);
   --sidebar-primary: oklch(0.488 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-accent: oklch(0.23 0.012 264);
+  --sidebar-accent-foreground: oklch(0.96 0.005 264);
+  --sidebar-border: oklch(1 0 0 / 8%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  --scribe-prose-color: oklch(0.93 0.007 264);
+  --scribe-prose-muted: oklch(0.68 0.012 264);
+  --scribe-prose-accent: oklch(0.78 0.12 254);
+  --scribe-prose-rule: oklch(1 0 0 / 10%);
+  --scribe-prose-surface: oklch(0.22 0.014 264);
 }
 
 @layer base {
@@ -123,9 +147,15 @@
   }
   html {
     height: 100%;
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--scribe-prose-font-sans);
+    font-feature-settings: 'cv11', 'ss01';
     height: 100%;
     margin: 0;
     overflow: hidden;
@@ -137,157 +167,680 @@
     flex-direction: column;
     overflow: hidden;
   }
+
+  ::selection {
+    background: color-mix(in oklch, var(--scribe-prose-accent) 22%, transparent);
+    color: inherit;
+  }
 }
 
-/* Tiptap / ProseMirror content */
-.scribe-editor-content .ProseMirror {
-  min-height: 100%;
-  outline: none;
+/* ─────────────────────────── Document canvas ─────────────────────────── */
+
+.scribe-editor-canvas {
+  background: var(--background);
+  padding-block: clamp(2.5rem, 6vh, 5rem);
+  padding-inline: clamp(1rem, 4vw, 2rem);
+  scroll-padding-top: 20vh;
+  transition: background-color 200ms ease;
 }
 
-.scribe-editor-content .ProseMirror .scribe-tab-autocomplete-ghost {
-  color: var(--muted-foreground);
-  opacity: 0.72;
-  pointer-events: none;
-  user-select: none;
-  white-space: pre-wrap;
+.scribe-editor-canvas[data-focus-mode='on'] {
+  padding-block: clamp(4rem, 12vh, 8rem);
 }
 
-.scribe-editor-content .ProseMirror ul,
-.scribe-editor-content .ProseMirror ol {
-  margin: 0.35em 0;
-  padding-left: 1.5rem;
+.scribe-editor-canvas[data-typewriter='on'] {
+  /* Reserve vertical space so the caret can sit near the viewport center while writing. */
+  padding-block: clamp(30vh, 35vh, 45vh);
+  scroll-padding-top: 40vh;
+  scroll-padding-bottom: 40vh;
 }
 
-.scribe-editor-content .ProseMirror code {
-  font-size: 0.9em;
-  background: var(--muted);
-  padding: 0.1em 0.35em;
-  border-radius: var(--radius-sm);
-}
-
-.scribe-editor-content .ProseMirror pre {
-  margin: 0.5em 0;
-  padding: 0.75rem 1rem;
-  background: var(--muted);
-  border-radius: var(--radius-md);
-  overflow-x: auto;
-}
-
-.scribe-editor-content .ProseMirror pre code {
-  background: none;
-  padding: 0;
-}
-
-.scribe-editor-content .ProseMirror blockquote {
-  margin: 0.5em 0;
-  padding-left: 1rem;
-  border-left: 3px solid var(--border);
-  color: var(--muted-foreground);
-}
-
-.scribe-editor-content .ProseMirror a.scribe-editor-link {
-  color: var(--primary);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-
-/* Word-like “pages” layout (visual only — no Pro pagination) */
-.scribe-editor-desk {
-  --scribe-desk: oklch(0.93 0.004 264);
-  --scribe-paper-shadow: 0 1px 2px oklch(0 0 0 / 6%), 0 4px 14px oklch(0 0 0 / 8%),
-    0 0 0 1px oklch(0 0 0 / 5%);
-  --scribe-stack: 0 20px 0 -8px oklch(0.96 0.002 264), 0 20px 10px -8px oklch(0 0 0 / 10%),
-    0 40px 0 -16px oklch(0.94 0.003 264), 0 40px 14px -16px oklch(0 0 0 / 6%);
-  background: var(--scribe-desk);
-  padding: 1rem clamp(0.5rem, 2vw, 1.5rem) 1.75rem;
-}
-
-.dark .scribe-editor-desk {
-  --scribe-desk: oklch(0.22 0.01 264);
-  --scribe-paper-shadow: 0 1px 2px oklch(0 0 0 / 35%), 0 6px 20px oklch(0 0 0 / 45%),
-    0 0 0 1px oklch(1 0 0 / 8%);
-  --scribe-stack: 0 20px 0 -8px oklch(0.26 0.01 264), 0 20px 12px -8px oklch(0 0 0 / 55%),
-    0 40px 0 -16px oklch(0.24 0.01 264), 0 40px 16px -16px oklch(0 0 0 / 35%);
-}
-
-.scribe-editor-paper {
-  width: 100%;
-  max-width: 210mm;
+.scribe-editor-column {
+  width: min(100%, calc(var(--scribe-content-max) * var(--scribe-content-scale)));
   margin-inline: auto;
-  min-height: 297mm;
-  box-sizing: border-box;
-  padding: 25mm 25mm 28mm;
-  background: oklch(1 0 0);
-  color: oklch(0.2 0.02 264);
-  border-radius: 1px;
-  box-shadow: var(--scribe-paper-shadow), var(--scribe-stack);
-}
-
-.dark .scribe-editor-paper {
-  background: oklch(0.985 0.002 264);
-  color: oklch(0.16 0.02 264);
+  color: var(--scribe-prose-color);
+  font-family: var(--scribe-prose-font);
+  font-size: calc(1.0625rem * var(--scribe-content-scale));
+  line-height: 1.68;
+  letter-spacing: -0.003em;
+  font-feature-settings: 'kern', 'liga', 'onum';
 }
 
 .scribe-editor-content .ProseMirror {
-  font-family: Calibri, 'Carlito', 'Segoe UI', system-ui, sans-serif;
-  font-size: 11pt;
-  line-height: 1.15;
-  letter-spacing: 0.01em;
+  outline: none;
+  min-height: 40vh;
+  caret-color: var(--scribe-prose-accent);
+}
+
+.scribe-editor-content .ProseMirror > * + * {
+  margin-top: 0.9em;
+}
+
+.scribe-editor-content .ProseMirror > *:first-child {
+  margin-top: 0;
 }
 
 .scribe-editor-content .ProseMirror p {
-  margin: 0 0 0.5em;
+  margin: 0;
 }
 
 .scribe-editor-content .ProseMirror h1,
 .scribe-editor-content .ProseMirror h2,
 .scribe-editor-content .ProseMirror h3 {
-  font-family: Calibri, 'Carlito', 'Segoe UI', system-ui, sans-serif;
-  font-weight: 600;
-  line-height: 1.08;
-  margin: 0.5em 0 0.25em;
+  font-family: var(--scribe-prose-font-sans);
+  font-weight: 650;
+  letter-spacing: -0.022em;
+  color: var(--scribe-prose-color);
 }
 
 .scribe-editor-content .ProseMirror h1 {
-  font-size: 16pt;
+  font-size: calc(2.35rem * var(--scribe-content-scale));
+  line-height: 1.12;
+  margin-top: 0.4em;
+  letter-spacing: -0.03em;
 }
 
 .scribe-editor-content .ProseMirror h2 {
-  font-size: 14pt;
+  font-size: calc(1.65rem * var(--scribe-content-scale));
+  line-height: 1.2;
+  margin-top: 1.8em;
 }
 
 .scribe-editor-content .ProseMirror h3 {
-  font-size: 12pt;
+  font-size: calc(1.25rem * var(--scribe-content-scale));
+  line-height: 1.3;
+  margin-top: 1.4em;
+  letter-spacing: -0.015em;
 }
 
-/* Horizontal rule ≈ manual page break hint (StarterKit) */
-.scribe-editor-content .ProseMirror hr {
-  margin: 1.75rem 0;
-  padding: 0;
-  border: none;
-  border-top: 1px dotted oklch(0.65 0.02 264);
-  height: 0;
+.scribe-editor-content .ProseMirror h1 + p,
+.scribe-editor-content .ProseMirror h2 + p,
+.scribe-editor-content .ProseMirror h3 + p {
+  margin-top: 0.4em;
+}
+
+.scribe-editor-content .ProseMirror strong {
+  font-weight: 650;
+  color: var(--scribe-prose-color);
+}
+
+.scribe-editor-content .ProseMirror em {
+  font-style: italic;
+}
+
+.scribe-editor-content .ProseMirror a.scribe-editor-link {
+  color: var(--scribe-prose-accent);
+  text-decoration: underline;
+  text-decoration-thickness: from-font;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in oklch, var(--scribe-prose-accent) 50%, transparent);
+  cursor: pointer;
+  transition: text-decoration-color 120ms ease;
+}
+
+.scribe-editor-content .ProseMirror a.scribe-editor-link:hover {
+  text-decoration-color: var(--scribe-prose-accent);
+}
+
+.scribe-editor-content .ProseMirror ul,
+.scribe-editor-content .ProseMirror ol {
+  padding-left: 1.4em;
+}
+
+.scribe-editor-content .ProseMirror ul li::marker {
+  color: var(--scribe-prose-muted);
+}
+
+.scribe-editor-content .ProseMirror ol li::marker {
+  color: var(--scribe-prose-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.scribe-editor-content .ProseMirror li {
+  margin: 0.2em 0;
+}
+
+.scribe-editor-content .ProseMirror li > p {
+  margin: 0;
+}
+
+.scribe-editor-content .ProseMirror blockquote {
+  margin: 0;
+  padding: 0.2em 0 0.2em 1.15em;
+  border-left: 3px solid var(--scribe-prose-rule);
+  color: var(--scribe-prose-muted);
+  font-style: italic;
+  font-feature-settings: 'kern', 'liga';
+}
+
+.scribe-editor-content .ProseMirror code {
+  font-family: var(--scribe-prose-font-mono);
+  font-size: 0.88em;
+  background: var(--scribe-prose-surface);
+  color: var(--scribe-prose-color);
+  padding: 0.12em 0.36em;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in oklch, var(--scribe-prose-rule) 80%, transparent);
+  font-variant-ligatures: none;
+}
+
+.scribe-editor-content .ProseMirror pre {
+  font-family: var(--scribe-prose-font-mono);
+  font-size: 0.88em;
+  line-height: 1.55;
+  margin: 0;
+  padding: 1rem 1.15rem;
+  background: var(--scribe-prose-surface);
+  color: var(--scribe-prose-color);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--scribe-prose-rule);
+  overflow-x: auto;
+  position: relative;
+}
+
+.scribe-editor-content .ProseMirror pre code {
   background: none;
+  padding: 0;
+  border: 0;
+  font-size: inherit;
+  color: inherit;
 }
 
-.scribe-editor-content .ProseMirror hr.ProseMirror-selectednode,
-.scribe-editor-content .ProseMirror hr:hover {
-  border-top-color: oklch(0.5 0.05 264);
+.scribe-editor-content .ProseMirror hr {
+  margin: 2rem 0;
+  border: none;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--scribe-prose-rule) 12%,
+    var(--scribe-prose-rule) 88%,
+    transparent
+  );
 }
+
+.scribe-editor-content .ProseMirror hr.ProseMirror-selectednode {
+  background: var(--scribe-prose-accent);
+}
+
+/* Placeholder (Tiptap Placeholder extension) */
+.scribe-editor-content .ProseMirror p.is-editor-empty:first-child::before,
+.scribe-editor-content .ProseMirror h1.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--scribe-prose-muted);
+  opacity: 0.55;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.scribe-editor-content .ProseMirror .is-empty::before {
+  color: var(--scribe-prose-muted);
+  opacity: 0.45;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Tab-autocomplete ghost text */
+.scribe-editor-content .ProseMirror .scribe-tab-autocomplete {
+  display: inline;
+  pointer-events: none;
+  user-select: none;
+}
+
+.scribe-editor-content .ProseMirror .scribe-tab-autocomplete-ghost {
+  color: var(--scribe-prose-muted);
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
+  white-space: pre-wrap;
+  font-style: italic;
+}
+
+.scribe-editor-content .ProseMirror .scribe-tab-autocomplete-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-inline-start: 0.5rem;
+  padding: 0 0.35rem;
+  height: 1.25rem;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--muted-foreground);
+  background: color-mix(in oklab, var(--muted) 80%, transparent);
+  border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  border-radius: 0.375rem;
+  opacity: 0;
+  transform: translateX(-0.15rem);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+  animation: scribe-tab-hint-fade 180ms ease 200ms forwards;
+  vertical-align: baseline;
+}
+
+.scribe-editor-content .ProseMirror .scribe-tab-autocomplete-hint kbd {
+  display: inline-block;
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
+  line-height: 1;
+}
+
+@keyframes scribe-tab-hint-fade {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ─────────────────────────── Focus mode ─────────────────────────── */
+
+.scribe-editor-canvas[data-focus-mode='on'] .ProseMirror > *:not(.has-focus) {
+  opacity: 0.28;
+  transition: opacity 250ms ease;
+}
+
+.scribe-editor-canvas[data-focus-mode='on'] .ProseMirror .has-focus {
+  opacity: 1;
+}
+
+.scribe-editor-canvas[data-focus-mode='on']:hover .ProseMirror > *:not(.has-focus) {
+  opacity: 0.55;
+}
+
+/* ─────────────────────────── Tables ─────────────────────────── */
+
+.scribe-editor-content .ProseMirror table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.2em 0;
+  table-layout: fixed;
+  overflow: hidden;
+  font-size: 0.95em;
+}
+
+.scribe-editor-content .ProseMirror table th,
+.scribe-editor-content .ProseMirror table td {
+  border: 1px solid var(--scribe-prose-rule);
+  padding: 0.55rem 0.75rem;
+  vertical-align: top;
+  position: relative;
+  min-width: 4em;
+}
+
+.scribe-editor-content .ProseMirror table th {
+  background: var(--scribe-prose-surface);
+  font-weight: 600;
+  text-align: left;
+}
+
+.scribe-editor-content .ProseMirror table .selectedCell {
+  background: color-mix(in oklch, var(--scribe-prose-accent) 12%, transparent);
+}
+
+.scribe-editor-content .ProseMirror table .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--scribe-prose-accent);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.scribe-editor-content .ProseMirror table:hover .column-resize-handle {
+  opacity: 0.4;
+}
+
+.scribe-editor-content .ProseMirror .tableWrapper {
+  overflow-x: auto;
+  margin: 0;
+}
+
+/* ─────────────────────────── Task list ─────────────────────────── */
+
+.scribe-editor-content .ProseMirror ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0.25em;
+}
+
+.scribe-editor-content .ProseMirror ul[data-type='taskList'] li {
+  display: flex;
+  gap: 0.6em;
+  align-items: flex-start;
+  margin: 0.2em 0;
+}
+
+.scribe-editor-content .ProseMirror ul[data-type='taskList'] li > label {
+  margin-top: 0.35em;
+  user-select: none;
+}
+
+.scribe-editor-content .ProseMirror ul[data-type='taskList'] li > label input[type='checkbox'] {
+  appearance: none;
+  width: 1.05em;
+  height: 1.05em;
+  border: 1.5px solid var(--scribe-prose-rule);
+  border-radius: 0.3em;
+  background: transparent;
+  cursor: pointer;
+  display: inline-grid;
+  place-content: center;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.scribe-editor-content .ProseMirror ul[data-type='taskList'] li > label input[type='checkbox']:hover {
+  border-color: var(--scribe-prose-accent);
+}
+
+.scribe-editor-content
+  .ProseMirror
+  ul[data-type='taskList']
+  li
+  > label
+  input[type='checkbox']:checked {
+  background: var(--scribe-prose-accent);
+  border-color: var(--scribe-prose-accent);
+}
+
+.scribe-editor-content
+  .ProseMirror
+  ul[data-type='taskList']
+  li
+  > label
+  input[type='checkbox']:checked::after {
+  content: '';
+  width: 0.55em;
+  height: 0.55em;
+  background: var(--primary-foreground);
+  clip-path: polygon(14% 44%, 0% 58%, 37% 100%, 100% 18%, 85% 4%, 36% 70%);
+}
+
+.scribe-editor-content .ProseMirror ul[data-type='taskList'] li > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.scribe-editor-content .ProseMirror ul[data-type='taskList'] li[data-checked='true'] > div {
+  color: var(--scribe-prose-muted);
+  text-decoration: line-through;
+}
+
+/* ─────────────────────────── Images ─────────────────────────── */
+
+.scribe-editor-content .ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  display: block;
+  margin: 0;
+}
+
+.scribe-editor-content .ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid var(--scribe-prose-accent);
+  outline-offset: 2px;
+}
+
+/* ─────────────────────────── Callouts ─────────────────────────── */
+
+.scribe-editor-content .ProseMirror [data-type='callout'] {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--scribe-prose-rule);
+  background: var(--scribe-prose-surface);
+  position: relative;
+  margin: 0;
+}
+
+.scribe-editor-content .ProseMirror [data-type='callout'][data-variant='info'] {
+  border-color: color-mix(in oklch, var(--scribe-prose-accent) 30%, var(--scribe-prose-rule));
+  background: color-mix(in oklch, var(--scribe-prose-accent) 6%, var(--scribe-prose-surface));
+}
+
+.scribe-editor-content .ProseMirror [data-type='callout'][data-variant='warning'] {
+  border-color: oklch(0.82 0.16 80 / 40%);
+  background: oklch(0.82 0.16 80 / 10%);
+}
+
+.scribe-editor-content .ProseMirror [data-type='callout'][data-variant='note'] {
+  border-color: var(--scribe-prose-rule);
+  background: var(--scribe-prose-surface);
+}
+
+.scribe-editor-content .ProseMirror [data-type='callout'] .callout-icon {
+  flex-shrink: 0;
+  font-size: 1.1em;
+  line-height: 1.5;
+  user-select: none;
+}
+
+.scribe-editor-content .ProseMirror [data-type='callout'] .callout-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.scribe-editor-content .ProseMirror [data-type='callout'] .callout-body > * {
+  margin: 0;
+}
+
+.scribe-editor-content .ProseMirror [data-type='callout'] .callout-body > * + * {
+  margin-top: 0.4em;
+}
+
+/* ─────────────────────────── Code highlight (lowlight) ─────────────────────────── */
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--scribe-prose-muted);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-name,
+.hljs-built_in {
+  color: oklch(0.6 0.18 302);
+}
+
+.hljs-string,
+.hljs-attr,
+.hljs-addition {
+  color: oklch(0.6 0.14 152);
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-variable,
+.hljs-template-variable {
+  color: oklch(0.62 0.16 40);
+}
+
+.hljs-title,
+.hljs-section,
+.hljs-function .hljs-title,
+.hljs-title.class_,
+.hljs-title.function_ {
+  color: oklch(0.5 0.16 254);
+}
+
+.hljs-type,
+.hljs-meta,
+.hljs-params {
+  color: oklch(0.55 0.12 200);
+}
+
+.hljs-deletion {
+  color: oklch(0.55 0.2 27);
+}
+
+.dark .hljs-keyword,
+.dark .hljs-selector-tag,
+.dark .hljs-literal,
+.dark .hljs-name,
+.dark .hljs-built_in {
+  color: oklch(0.78 0.16 302);
+}
+
+.dark .hljs-string,
+.dark .hljs-attr {
+  color: oklch(0.78 0.14 152);
+}
+
+.dark .hljs-number,
+.dark .hljs-symbol,
+.dark .hljs-variable {
+  color: oklch(0.78 0.14 60);
+}
+
+.dark .hljs-title,
+.dark .hljs-section,
+.dark .hljs-title.function_,
+.dark .hljs-title.class_ {
+  color: oklch(0.78 0.14 254);
+}
+
+.dark .hljs-type,
+.dark .hljs-meta {
+  color: oklch(0.78 0.1 200);
+}
+
+/* ─────────────────────────── Drag handle overlay ─────────────────────────── */
+
+/*
+ * @tiptap/extension-drag-handle-react positions this element absolutely, in
+ * document-space, aligned with the currently hovered block. We sit it in the
+ * gutter to the left of the prose column.
+ */
+.scribe-block-handle {
+  /* Pull the handle slightly left of the prose column. */
+  transform: translateX(calc(-100% - 0.5rem));
+  /* The child fades in on hover; the handle itself is always positioned. */
+  opacity: 1;
+  transition: opacity 120ms ease;
+}
+
+.scribe-block-handle[data-hidden='true'] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Legacy custom drag-handle styling (kept for reference/compat). */
+.scribe-drag-handle {
+  position: absolute;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.scribe-drag-handle.is-visible {
+  opacity: 1;
+}
+
+.scribe-drag-handle button {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--scribe-prose-muted);
+  border-radius: var(--radius-sm);
+  width: 20px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.scribe-drag-handle button:hover {
+  color: var(--scribe-prose-color);
+  background: var(--scribe-prose-surface);
+  border-color: var(--scribe-prose-rule);
+}
+
+.scribe-drag-handle button[data-action='add'] {
+  cursor: pointer;
+}
+
+.scribe-drag-handle button[data-action='drag'] {
+  cursor: grab;
+}
+
+.scribe-drag-handle.is-dragging button[data-action='drag'] {
+  cursor: grabbing;
+}
+
+/* ─────────────────────────── Print-preview (paper) mode ─────────────────────────── */
+
+.scribe-editor-canvas[data-paper='on'] {
+  background: oklch(0.93 0.004 264);
+  padding-block: 1rem 1.75rem;
+  padding-inline: clamp(0.5rem, 2vw, 1.5rem);
+}
+
+.dark .scribe-editor-canvas[data-paper='on'] {
+  background: oklch(0.22 0.01 264);
+}
+
+.scribe-editor-canvas[data-paper='on'] .scribe-editor-column {
+  background: oklch(1 0 0);
+  color: oklch(0.18 0.01 264);
+  width: 100%;
+  max-width: 210mm;
+  min-height: 297mm;
+  padding: 25mm 25mm 28mm;
+  box-sizing: border-box;
+  border-radius: 1px;
+  box-shadow:
+    0 1px 2px oklch(0 0 0 / 6%),
+    0 4px 14px oklch(0 0 0 / 8%),
+    0 0 0 1px oklch(0 0 0 / 5%),
+    0 20px 0 -8px oklch(0.96 0.002 264),
+    0 20px 10px -8px oklch(0 0 0 / 10%);
+  font-family: Calibri, 'Carlito', 'Segoe UI', system-ui, sans-serif;
+  font-size: 11pt;
+  line-height: 1.25;
+}
+
+.dark .scribe-editor-canvas[data-paper='on'] .scribe-editor-column {
+  background: oklch(0.985 0.002 264);
+  box-shadow:
+    0 1px 2px oklch(0 0 0 / 35%),
+    0 6px 20px oklch(0 0 0 / 45%),
+    0 0 0 1px oklch(1 0 0 / 8%);
+}
+
+/* ─────────────────────────── Print ─────────────────────────── */
 
 @media print {
   body * {
     visibility: hidden;
   }
 
-  .scribe-editor-desk,
-  .scribe-editor-desk * {
+  .scribe-editor-canvas,
+  .scribe-editor-canvas * {
     visibility: visible;
   }
 
-  .scribe-editor-desk {
+  .scribe-editor-canvas {
     position: absolute;
     inset: 0;
     padding: 0;
@@ -295,10 +848,11 @@
     overflow: visible;
   }
 
-  .scribe-editor-paper {
+  .scribe-editor-column {
+    width: 100%;
     max-width: none;
-    min-height: 0;
-    margin: 0;
+    background: white;
+    color: black;
     padding: 20mm;
     box-shadow: none;
     border-radius: 0;
@@ -314,5 +868,6 @@
     border: none;
     height: 0;
     margin: 0;
+    background: none;
   }
 }

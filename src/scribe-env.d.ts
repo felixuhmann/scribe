@@ -8,6 +8,7 @@ import type {
   ExportPdfResult,
   ListExplorerFolderResult,
   OpenDocumentResult,
+  RenameFileResult,
   SaveHtmlAsResult,
   SaveHtmlToPathResult,
   SaveMarkdownAsResult,
@@ -45,6 +46,7 @@ declare global {
       saveMarkdownToPath: (filePath: string, markdown: string) => Promise<SaveMarkdownToPathResult>;
       saveMarkdownAs: (input: { markdown: string; defaultPath?: string }) => Promise<SaveMarkdownAsResult>;
       exportPdf: (input: { htmlBody: string; defaultPath?: string }) => Promise<ExportPdfResult>;
+      renameFile: (filePath: string, newBasename: string) => Promise<RenameFileResult>;
       documentChatStream: (params: {
         messages: DocumentChatStartPayload['messages'];
         documentHtml: string;

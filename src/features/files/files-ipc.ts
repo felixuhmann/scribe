@@ -8,6 +8,7 @@ import type {
   ExplorerFolderEntry,
   ListExplorerFolderResult,
   OpenDocumentResult,
+  RenameFileResult,
   SaveHtmlAsResult,
   SaveHtmlToPathResult,
   SaveMarkdownAsResult,
@@ -206,5 +207,32 @@ export function registerFilesIpc(): void {
       defaultPath: payload.defaultPath,
       parentWindow: win,
     });
+  });
+
+  registerInvoke(channels.renameFile, async (payload): Promise<RenameFileResult> => {
+    const src = path.resolve(payload.path);
+    const base = payload.newBasename.trim();
+    if (base === '' || /[\\/]/.test(base) || base === '.' || base === '..') {
+      return { ok: false, error: 'Invalid filename' };
+    }
+    const dir = path.dirname(src);
+    const srcExt = path.extname(src);
+    const hasExt = path.extname(base) !== '';
+    const finalBase = hasExt ? base : `${base}${srcExt}`;
+    const dst = path.resolve(path.join(dir, finalBase));
+    if (dst === src) return { ok: true, path: src };
+    try {
+      try {
+        await fs.access(dst);
+        return { ok: false, error: 'A file with that name already exists' };
+      } catch {
+        /* target does not exist — proceed */
+      }
+      await fs.rename(src, dst);
+      return { ok: true, path: dst };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Rename failed';
+      return { ok: false, error: message };
+    }
   });
 }

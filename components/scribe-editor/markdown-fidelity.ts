@@ -17,6 +17,11 @@ export function getMarkdownFidelityWarnings(html: string): string[] {
     warnings.push('Superscript');
   }
 
+  // Images with base64 data URIs are huge; inline markdown can't reference them without a file.
+  if (doc.querySelector('img[src^="data:"]')) {
+    warnings.push('Embedded images (data URIs)');
+  }
+
   doc.querySelectorAll('[style]').forEach((el) => {
     const st = el.getAttribute('style') ?? '';
     const m = /text-align:\s*([^;]+)/i.exec(st);

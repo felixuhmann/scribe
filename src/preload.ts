@@ -12,6 +12,7 @@ import type {
   ExportPdfResult,
   ListExplorerFolderResult,
   OpenDocumentResult,
+  RenameFileResult,
   SaveHtmlAsResult,
   SaveHtmlToPathResult,
   SaveMarkdownAsResult,
@@ -57,6 +58,8 @@ contextBridge.exposeInMainWorld('scribe', {
     ipcRenderer.invoke(channels.saveMarkdownAs.name, input),
   exportPdf: (input: { htmlBody: string; defaultPath?: string }): Promise<ExportPdfResult> =>
     ipcRenderer.invoke(channels.exportPdf.name, input),
+  renameFile: (filePath: string, newBasename: string): Promise<RenameFileResult> =>
+    ipcRenderer.invoke(channels.renameFile.name, { path: filePath, newBasename }),
   documentChatStream: (params: {
     messages: DocumentChatStartPayload['messages'];
     documentHtml: string;

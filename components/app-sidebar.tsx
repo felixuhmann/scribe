@@ -1,6 +1,7 @@
-import { Files, MessageSquare } from 'lucide-react';
+import { Files, List, MessageSquare } from 'lucide-react';
 
 import { DocumentChatPanel } from '@/components/document-chat/document-chat-panel';
+import { OutlinePanel } from '@/components/scribe-editor/outline-panel';
 import { SidebarFileExplorer } from '@/components/sidebar-file-explorer';
 import { Sidebar, SidebarContent, SidebarHeader } from '@/components/ui/sidebar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -19,6 +20,10 @@ export function AppSidebar() {
               <MessageSquare className="size-4 shrink-0 opacity-90" aria-hidden />
               Chat
             </TabsTrigger>
+            <TabsTrigger value="outline" className={cn(sidebarTabTriggerClass)}>
+              <List className="size-4 shrink-0 opacity-90" aria-hidden />
+              Outline
+            </TabsTrigger>
             <TabsTrigger value="files" className={cn(sidebarTabTriggerClass)}>
               <Files className="size-4 shrink-0 opacity-90" aria-hidden />
               Files
@@ -31,6 +36,12 @@ export function AppSidebar() {
             className="mt-0 flex min-h-0 flex-1 flex-col outline-none data-[state=inactive]:hidden"
           >
             <DocumentChatPanel />
+          </TabsContent>
+          <TabsContent
+            value="outline"
+            className="mt-0 flex min-h-0 flex-1 flex-col outline-none data-[state=inactive]:hidden"
+          >
+            <OutlinePanel />
           </TabsContent>
           <TabsContent
             value="files"

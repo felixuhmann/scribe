@@ -11,20 +11,57 @@ import {
   localFileToEditorHtml,
   openDocumentResultToEditorHtml,
 } from '@/lib/markdown/markdown-io';
+import { CommandPalette } from './command-palette';
+import { EditorTopBar } from './editor-top-bar';
 import { LinkDialog } from './link-dialog';
-import { EditorMenubar } from './editor-menubar';
+import { OnboardingCoachmarks } from './onboarding-coachmarks';
 import { SettingsDialog } from './settings-dialog';
+import { ShortcutsSheet } from './shortcuts-sheet';
+import { useAutosave } from './use-autosave';
 import { useEditorChromeState } from './use-editor-chrome-state';
+
+function toggleThemeClass() {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  const isDark = root.classList.toggle('dark');
+  try {
+    localStorage.setItem('scribe.theme', isDark ? 'dark' : 'light');
+  } catch {
+    /* ignore */
+  }
+}
+
+function syncStoredTheme() {
+  if (typeof document === 'undefined') return;
+  try {
+    const stored = localStorage.getItem('scribe.theme');
+    if (stored === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else if (stored === 'light') {
+      document.documentElement.classList.remove('dark');
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 export function ScribeEditorChrome() {
   const {
     notifySettingsSaved,
     registerOpenLinkDialogHandler,
     registerOpenDocumentFromDiskHandler,
+    isFormattingToolbarOpen,
+    toggleFormattingToolbar,
+    isCommandPaletteOpen,
+    setCommandPaletteOpen,
+    canvas,
+    autocompleteEnabled,
+    requestToggleAutocomplete,
   } = useEditorSession();
   const chrome = useEditorChromeState();
   const { mod, ...toolChrome } = chrome;
   const { editor } = toolChrome;
+  const { status: saveStatus, flush: flushAutosave } = useAutosave(editor);
   const {
     documentKey,
     diskAbsolutePath,
@@ -40,6 +77,7 @@ export function ScribeEditorChrome() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const openFilePicker = () => fileInputRef.current?.click();
 
@@ -272,28 +310,89 @@ export function ScribeEditorChrome() {
   }, [editor, notifyOpenedFromDisk, registerOpenDocumentFromDiskHandler]);
 
   useEffect(() => {
+    syncStoredTheme();
+  }, []);
+
+  useEffect(() => {
     if (!editor) return;
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      const target = e.target as HTMLElement | null;
+      const isEditable =
+        !!target &&
+        (target.isContentEditable ||
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT');
+
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) {
+        if (!isEditable && e.key === '?' && !e.altKey) {
+          e.preventDefault();
+          setShortcutsOpen(true);
+        }
+        return;
+      }
+      const key = e.key.toLowerCase();
+      if (key === '/' && e.shiftKey) {
+        e.preventDefault();
+        setShortcutsOpen(true);
+        return;
+      }
+      if (key === 'k' && !e.shiftKey) {
+        e.preventDefault();
+        setCommandPaletteOpen(true);
+        return;
+      }
+      if (key === 'p' && e.shiftKey) {
+        e.preventDefault();
+        setCommandPaletteOpen(true);
+        return;
+      }
+      if (key === 'k' && e.shiftKey) {
         e.preventDefault();
         setLinkOpen(true);
+        return;
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+      if (key === 'f' && e.shiftKey) {
+        e.preventDefault();
+        canvas.toggleFocusMode();
+        return;
+      }
+      if (e.key === ',') {
         e.preventDefault();
         setSettingsOpen(true);
+        return;
       }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+      if (key === 's') {
         e.preventDefault();
         if (e.shiftKey) {
           void saveAsHtml();
         } else {
-          void saveDocument();
+          void flushAutosave().then(() => {
+            void saveDocument();
+          });
         }
+        return;
+      }
+      if (key === '=' || key === '+') {
+        e.preventDefault();
+        canvas.zoomIn();
+        return;
+      }
+      if (key === '-') {
+        e.preventDefault();
+        canvas.zoomOut();
+        return;
+      }
+      if (key === '0') {
+        e.preventDefault();
+        canvas.resetZoom();
+        return;
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [editor, saveAsHtml, saveDocument]);
+  }, [canvas, editor, flushAutosave, saveAsHtml, saveDocument, setCommandPaletteOpen]);
 
   return (
     <>
@@ -310,32 +409,49 @@ export function ScribeEditorChrome() {
         <LinkDialog editor={editor} open={linkOpen} onOpenChange={setLinkOpen} />
       ) : null}
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} onSaved={notifySettingsSaved} />
+      <ShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} mod={mod} />
+      <OnboardingCoachmarks mod={mod} />
 
-      <header
-        className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-50 flex shrink-0 flex-col border-b border-border backdrop-blur-sm"
-        role="banner"
-      >
-        <div className="flex h-9 shrink-0 items-center gap-1.5 px-2">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5">
-            <EditorMenubar
-              editor={editor}
-              mod={mod}
-              canUndo={toolChrome.canUndo}
-              canRedo={toolChrome.canRedo}
-              textAlign={toolChrome.textAlign}
-              onNewDocument={newDocument}
-              onOpenFile={openDocument}
-              onSaveDocument={() => void saveDocument()}
-              onSaveHtmlAs={() => void saveAsHtml()}
-              onSaveMarkdownAs={() => void saveAsMarkdown()}
-              onExportPdf={() => void exportPdf()}
-              onOpenLink={() => setLinkOpen(true)}
-              onOpenSettings={() => setSettingsOpen(true)}
-            />
-          </div>
-        </div>
-
-      </header>
+      <EditorTopBar
+        editor={editor}
+        mod={mod}
+        saveStatus={saveStatus}
+        isFormattingToolbarOpen={isFormattingToolbarOpen}
+        onToggleFormattingToolbar={toggleFormattingToolbar}
+        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+        canvas={canvas}
+        onNewDocument={newDocument}
+        onOpenFile={() => void openDocument()}
+        onSaveDocument={() => void saveDocument()}
+        onSaveHtmlAs={() => void saveAsHtml()}
+        onSaveMarkdownAs={() => void saveAsMarkdown()}
+        onExportPdf={() => void exportPdf()}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
+      />
+      <CommandPalette
+        open={isCommandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+        editor={editor}
+        mod={mod}
+        canvas={canvas}
+        canUndo={toolChrome.canUndo}
+        canRedo={toolChrome.canRedo}
+        isFormattingToolbarOpen={isFormattingToolbarOpen}
+        onToggleFormattingToolbar={toggleFormattingToolbar}
+        onNewDocument={newDocument}
+        onOpenFile={() => void openDocument()}
+        onSaveDocument={() => void saveDocument()}
+        onSaveHtmlAs={() => void saveAsHtml()}
+        onSaveMarkdownAs={() => void saveAsMarkdown()}
+        onExportPdf={() => void exportPdf()}
+        onOpenLink={() => setLinkOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
+        onToggleTheme={toggleThemeClass}
+        autocompleteEnabled={autocompleteEnabled}
+        onToggleAutocomplete={requestToggleAutocomplete}
+      />
     </>
   );
 }

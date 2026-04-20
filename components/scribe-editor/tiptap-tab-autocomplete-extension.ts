@@ -89,11 +89,21 @@ export const TabAutocomplete = Extension.create({
             const deco = Decoration.widget(
               st.anchor,
               () => {
-                const el = document.createElement('span');
-                el.className = 'scribe-tab-autocomplete-ghost';
-                el.textContent = ghostText;
-                el.setAttribute('aria-hidden', 'true');
-                return el;
+                const wrapper = document.createElement('span');
+                wrapper.className = 'scribe-tab-autocomplete';
+                wrapper.setAttribute('aria-hidden', 'true');
+
+                const ghost = document.createElement('span');
+                ghost.className = 'scribe-tab-autocomplete-ghost';
+                ghost.textContent = ghostText;
+                wrapper.appendChild(ghost);
+
+                const hint = document.createElement('span');
+                hint.className = 'scribe-tab-autocomplete-hint';
+                hint.innerHTML = '<kbd>Tab</kbd> to accept';
+                wrapper.appendChild(hint);
+
+                return wrapper;
               },
               { side: 1, key: 'scribe-tab-autocomplete-ghost' },
             );

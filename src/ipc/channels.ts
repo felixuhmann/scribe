@@ -6,6 +6,7 @@ import type {
   ExportPdfResult,
   ListExplorerFolderResult,
   OpenDocumentResult,
+  RenameFileResult,
   SaveHtmlAsResult,
   SaveHtmlToPathResult,
   SaveMarkdownAsResult,
@@ -117,6 +118,7 @@ export const channels = {
   exportPdf: invoke<{ htmlBody: string; defaultPath?: string }, ExportPdfResult>(
     'scribe:exportPdf',
   ),
+  renameFile: invoke<{ path: string; newBasename: string }, RenameFileResult>('scribe:renameFile'),
 
   // Document chat: send/event pattern for streaming.
   documentChatStart: send<DocumentChatStartPayload>('scribe:documentChat:start'),
