@@ -3,12 +3,15 @@ import type {
   DocumentChatStartPayload,
 } from './ipc/channels';
 import type {
+  CreateFileInFolderResult,
+  CreateFolderInFolderResult,
   DocumentChatBundle,
   DocumentChatSessionMergePatch,
   ExportPdfResult,
   ListExplorerFolderResult,
   OpenDocumentResult,
   RenameFileResult,
+  RevealInOSResult,
   SaveHtmlAsResult,
   SaveHtmlToPathResult,
   SaveMarkdownAsResult,
@@ -17,6 +20,7 @@ import type {
   ScribeQuickEditResult,
   ScribeSetSettingsInput,
   ScribeSettingsPublic,
+  TrashItemResult,
 } from './scribe-ipc-types';
 
 export {};
@@ -47,6 +51,14 @@ declare global {
       saveMarkdownAs: (input: { markdown: string; defaultPath?: string }) => Promise<SaveMarkdownAsResult>;
       exportPdf: (input: { htmlBody: string; defaultPath?: string }) => Promise<ExportPdfResult>;
       renameFile: (filePath: string, newBasename: string) => Promise<RenameFileResult>;
+      revealInOS: (filePath: string) => Promise<RevealInOSResult>;
+      createFileInFolder: (parentDir: string, name: string) => Promise<CreateFileInFolderResult>;
+      createFolderInFolder: (
+        parentDir: string,
+        name: string,
+      ) => Promise<CreateFolderInFolderResult>;
+      trashItem: (filePath: string) => Promise<TrashItemResult>;
+      subscribeExplorerFolder: (rootPath: string, onChanged: () => void) => () => void;
       documentChatStream: (params: {
         messages: DocumentChatStartPayload['messages'];
         documentHtml: string;

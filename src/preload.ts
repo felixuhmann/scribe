@@ -7,12 +7,15 @@ import {
   type DocumentChatStartPayload,
 } from './ipc/channels';
 import type {
+  CreateFileInFolderResult,
+  CreateFolderInFolderResult,
   DocumentChatBundle,
   DocumentChatSessionMergePatch,
   ExportPdfResult,
   ListExplorerFolderResult,
   OpenDocumentResult,
   RenameFileResult,
+  RevealInOSResult,
   SaveHtmlAsResult,
   SaveHtmlToPathResult,
   SaveMarkdownAsResult,
@@ -21,6 +24,7 @@ import type {
   ScribeQuickEditResult,
   ScribeSetSettingsInput,
   ScribeSettingsPublic,
+  TrashItemResult,
 } from './scribe-ipc-types';
 
 contextBridge.exposeInMainWorld('scribe', {
@@ -60,6 +64,30 @@ contextBridge.exposeInMainWorld('scribe', {
     ipcRenderer.invoke(channels.exportPdf.name, input),
   renameFile: (filePath: string, newBasename: string): Promise<RenameFileResult> =>
     ipcRenderer.invoke(channels.renameFile.name, { path: filePath, newBasename }),
+  revealInOS: (filePath: string): Promise<RevealInOSResult> =>
+    ipcRenderer.invoke(channels.revealInOS.name, { path: filePath }),
+  createFileInFolder: (parentDir: string, name: string): Promise<CreateFileInFolderResult> =>
+    ipcRenderer.invoke(channels.createFileInFolder.name, { parentDir, name }),
+  createFolderInFolder: (parentDir: string, name: string): Promise<CreateFolderInFolderResult> =>
+    ipcRenderer.invoke(channels.createFolderInFolder.name, { parentDir, name }),
+  trashItem: (filePath: string): Promise<TrashItemResult> =>
+    ipcRenderer.invoke(channels.trashItem.name, { path: filePath }),
+  subscribeExplorerFolder: (rootPath: string, onChanged: () => void): (() => void) => {
+    const watchId =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `watch-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+    const listener = (_: unknown, payload: { watchId: string }) => {
+      if (payload.watchId !== watchId) return;
+      onChanged();
+    };
+    ipcRenderer.on(channels.explorerWatchChanged.name, listener);
+    ipcRenderer.send(channels.explorerWatchStart.name, { watchId, rootPath });
+    return () => {
+      ipcRenderer.removeListener(channels.explorerWatchChanged.name, listener);
+      ipcRenderer.send(channels.explorerWatchStop.name, { watchId });
+    };
+  },
   documentChatStream: (params: {
     messages: DocumentChatStartPayload['messages'];
     documentHtml: string;

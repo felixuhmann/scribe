@@ -76,12 +76,36 @@ export type OpenDocumentResult =
 
 /** Recursive tree of folders (only if they contain supported files) and supported document files. */
 export type ExplorerFolderEntry =
-  | { kind: 'dir'; name: string; path: string; children: ExplorerFolderEntry[] }
-  | { kind: 'file'; name: string; path: string };
+  | {
+      kind: 'dir';
+      name: string;
+      path: string;
+      mtimeMs: number;
+      children: ExplorerFolderEntry[];
+    }
+  | {
+      kind: 'file';
+      name: string;
+      path: string;
+      mtimeMs: number;
+      sizeBytes: number;
+    };
 
 export type ListExplorerFolderResult =
   | { ok: true; rootPath: string; entries: ExplorerFolderEntry[] }
   | { ok: false; error: string };
+
+export type RevealInOSResult = { ok: true } | { ok: false; error: string };
+
+export type CreateFileInFolderResult =
+  | { ok: true; path: string }
+  | { ok: false; error: string };
+
+export type CreateFolderInFolderResult =
+  | { ok: true; path: string }
+  | { ok: false; error: string };
+
+export type TrashItemResult = { ok: true } | { ok: false; error: string };
 
 export type SaveHtmlToPathResult = { ok: true } | { ok: false; error: string };
 

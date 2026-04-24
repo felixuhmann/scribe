@@ -1,12 +1,15 @@
 import type { UIMessage, UIMessageChunk } from 'ai';
 
 import type {
+  CreateFileInFolderResult,
+  CreateFolderInFolderResult,
   DocumentChatBundle,
   DocumentChatSessionMergePatch,
   ExportPdfResult,
   ListExplorerFolderResult,
   OpenDocumentResult,
   RenameFileResult,
+  RevealInOSResult,
   SaveHtmlAsResult,
   SaveHtmlToPathResult,
   SaveMarkdownAsResult,
@@ -15,6 +18,7 @@ import type {
   ScribeQuickEditResult,
   ScribeSetSettingsInput,
   ScribeSettingsPublic,
+  TrashItemResult,
 } from '../scribe-ipc-types';
 import type { DocumentChatMode, PlanDepthMode } from '../../lib/agents/document-chat-agent';
 
@@ -119,6 +123,20 @@ export const channels = {
     'scribe:exportPdf',
   ),
   renameFile: invoke<{ path: string; newBasename: string }, RenameFileResult>('scribe:renameFile'),
+
+  revealInOS: invoke<{ path: string }, RevealInOSResult>('scribe:revealInOS'),
+  createFileInFolder: invoke<{ parentDir: string; name: string }, CreateFileInFolderResult>(
+    'scribe:createFileInFolder',
+  ),
+  createFolderInFolder: invoke<{ parentDir: string; name: string }, CreateFolderInFolderResult>(
+    'scribe:createFolderInFolder',
+  ),
+  trashItem: invoke<{ path: string }, TrashItemResult>('scribe:trashItem'),
+
+  // Explorer watch: send/event pattern (debounced "changed" tick → renderer re-fetches).
+  explorerWatchStart: send<{ watchId: string; rootPath: string }>('scribe:explorer:watch:start'),
+  explorerWatchStop: send<{ watchId: string }>('scribe:explorer:watch:stop'),
+  explorerWatchChanged: event<{ watchId: string }>('scribe:explorer:watch:changed'),
 
   // Document chat: send/event pattern for streaming.
   documentChatStart: send<DocumentChatStartPayload>('scribe:documentChat:start'),

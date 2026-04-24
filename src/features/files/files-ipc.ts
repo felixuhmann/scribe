@@ -1,20 +1,25 @@
-import { BrowserWindow, dialog } from 'electron';
+import { BrowserWindow, dialog, shell, type WebContents } from 'electron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { channels } from '../../ipc/channels';
-import { registerInvoke } from '../../ipc/main-register';
+import { registerInvoke, registerOn, sendEvent } from '../../ipc/main-register';
 import type {
+  CreateFileInFolderResult,
+  CreateFolderInFolderResult,
   ExplorerFolderEntry,
   ListExplorerFolderResult,
   OpenDocumentResult,
   RenameFileResult,
+  RevealInOSResult,
   SaveHtmlAsResult,
   SaveHtmlToPathResult,
   SaveMarkdownAsResult,
   SaveMarkdownToPathResult,
+  TrashItemResult,
 } from '../../scribe-ipc-types';
 import { exportHtmlBodyToPdf } from './pdf-export';
+import { createExplorerWatcherRegistry } from './files-watcher';
 
 function wrapHtmlDocument(innerBodyHtml: string): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Document</title></head><body>${innerBodyHtml}</body></html>`;
@@ -62,23 +67,67 @@ async function listExplorerFolderEntries(absRoot: string): Promise<ExplorerFolde
   } catch {
     return [];
   }
+  const sorted = dirents.sort((a, b) => {
+    const ad = a.isDirectory() ? 0 : 1;
+    const bd = b.isDirectory() ? 0 : 1;
+    if (ad !== bd) return ad - bd;
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+  });
   const out: ExplorerFolderEntry[] = [];
-  const sorted = dirents.sort((a, b) => a.name.localeCompare(b.name));
   for (const d of sorted) {
     if (d.name.startsWith('.')) continue;
     const full = path.join(absRoot, d.name);
     if (d.isDirectory()) {
       if (EXPLORER_SKIP_DIRS.has(d.name)) continue;
       const children = await listExplorerFolderEntries(full);
-      if (children.length > 0) {
-        out.push({ kind: 'dir', name: d.name, path: full, children });
+      if (children.length === 0) continue;
+      let mtimeMs = 0;
+      try {
+        const st = await fs.stat(full);
+        mtimeMs = st.mtimeMs;
+      } catch {
+        /* ignore */
       }
+      out.push({ kind: 'dir', name: d.name, path: full, mtimeMs, children });
     } else if (d.isFile() && isSupportedExplorerFile(d.name)) {
-      out.push({ kind: 'file', name: d.name, path: full });
+      let mtimeMs = 0;
+      let sizeBytes = 0;
+      try {
+        const st = await fs.stat(full);
+        mtimeMs = st.mtimeMs;
+        sizeBytes = st.size;
+      } catch {
+        /* ignore */
+      }
+      out.push({ kind: 'file', name: d.name, path: full, mtimeMs, sizeBytes });
     }
   }
   return out;
 }
+
+const EXPLORER_NAME_INVALID = /[\\/]/;
+
+function validateExplorerBasename(name: string): string | null {
+  const trimmed = name.trim();
+  if (trimmed === '' || trimmed === '.' || trimmed === '..') {
+    return 'Invalid filename';
+  }
+  if (EXPLORER_NAME_INVALID.test(trimmed)) {
+    return 'Invalid filename';
+  }
+  return null;
+}
+
+async function pathExists(abs: string): Promise<boolean> {
+  try {
+    await fs.access(abs);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const explorerWatchers = createExplorerWatcherRegistry();
 
 export function registerFilesIpc(): void {
   registerInvoke(channels.openDocument, async (_req, event): Promise<OpenDocumentResult> => {
@@ -207,6 +256,108 @@ export function registerFilesIpc(): void {
       defaultPath: payload.defaultPath,
       parentWindow: win,
     });
+  });
+
+  registerInvoke(channels.revealInOS, async (payload): Promise<RevealInOSResult> => {
+    const target = path.resolve(payload.path);
+    try {
+      await fs.access(target);
+    } catch {
+      return { ok: false, error: 'Path does not exist' };
+    }
+    try {
+      shell.showItemInFolder(target);
+      return { ok: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Reveal failed';
+      return { ok: false, error: message };
+    }
+  });
+
+  registerInvoke(
+    channels.createFileInFolder,
+    async (payload): Promise<CreateFileInFolderResult> => {
+      const parentDir = path.resolve(payload.parentDir);
+      const nameError = validateExplorerBasename(payload.name);
+      if (nameError) return { ok: false, error: nameError };
+      const finalName = payload.name.trim();
+      const ext = path.extname(finalName);
+      const resolvedName = ext === '' ? `${finalName}.md` : finalName;
+      try {
+        const st = await fs.stat(parentDir);
+        if (!st.isDirectory()) return { ok: false, error: 'Parent is not a directory' };
+      } catch {
+        return { ok: false, error: 'Parent folder not found' };
+      }
+      const target = path.resolve(path.join(parentDir, resolvedName));
+      if (await pathExists(target)) {
+        return { ok: false, error: 'A file with that name already exists' };
+      }
+      try {
+        await fs.writeFile(target, '', { encoding: 'utf8', flag: 'wx' });
+        return { ok: true, path: target };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Create failed';
+        return { ok: false, error: message };
+      }
+    },
+  );
+
+  registerInvoke(
+    channels.createFolderInFolder,
+    async (payload): Promise<CreateFolderInFolderResult> => {
+      const parentDir = path.resolve(payload.parentDir);
+      const nameError = validateExplorerBasename(payload.name);
+      if (nameError) return { ok: false, error: nameError };
+      try {
+        const st = await fs.stat(parentDir);
+        if (!st.isDirectory()) return { ok: false, error: 'Parent is not a directory' };
+      } catch {
+        return { ok: false, error: 'Parent folder not found' };
+      }
+      const target = path.resolve(path.join(parentDir, payload.name.trim()));
+      if (await pathExists(target)) {
+        return { ok: false, error: 'A folder with that name already exists' };
+      }
+      try {
+        await fs.mkdir(target, { recursive: false });
+        return { ok: true, path: target };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Create failed';
+        return { ok: false, error: message };
+      }
+    },
+  );
+
+  registerInvoke(channels.trashItem, async (payload): Promise<TrashItemResult> => {
+    const target = path.resolve(payload.path);
+    try {
+      await fs.access(target);
+    } catch {
+      return { ok: false, error: 'Path does not exist' };
+    }
+    try {
+      await shell.trashItem(target);
+      return { ok: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not move to Trash';
+      return { ok: false, error: message };
+    }
+  });
+
+  registerOn(channels.explorerWatchStart, (payload, event) => {
+    explorerWatchers.start({
+      rootPath: path.resolve(payload.rootPath),
+      watchId: payload.watchId,
+      webContents: event.sender,
+      emit: (wc: WebContents) => {
+        sendEvent(wc, channels.explorerWatchChanged, { watchId: payload.watchId });
+      },
+    });
+  });
+
+  registerOn(channels.explorerWatchStop, (payload) => {
+    explorerWatchers.stop(payload.watchId);
   });
 
   registerInvoke(channels.renameFile, async (payload): Promise<RenameFileResult> => {
