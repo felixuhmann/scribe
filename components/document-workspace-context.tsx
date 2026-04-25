@@ -25,6 +25,20 @@ export function dirnameAbsolutePath(absolutePath: string): string {
   return normalized.slice(0, i) || normalized;
 }
 
+/** Slash-normalized absolute path with no trailing separators (cross-platform compare). */
+function normalizeForCompare(absolutePath: string): string {
+  return absolutePath.trim().replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
+/** True iff `filePath` lives somewhere inside `rootPath` (or is the root itself). */
+export function isPathWithin(filePath: string, rootPath: string): boolean {
+  const f = normalizeForCompare(filePath);
+  const r = normalizeForCompare(rootPath);
+  if (r === '') return false;
+  if (f === r) return true;
+  return f.startsWith(r + '/');
+}
+
 function readStoredOpenedFolderPath(): string | null {
   try {
     const v = sessionStorage.getItem(FOLDER_STORAGE_KEY);
@@ -164,12 +178,19 @@ export function DocumentWorkspaceProvider({ children }: { children: ReactNode })
     if (!diskAbsolutePath) return;
     const dir = dirnameAbsolutePath(diskAbsolutePath);
     if (!dir || dir === diskAbsolutePath) return;
-    setOpenedFolderAbsolutePath(dir);
-    try {
-      sessionStorage.setItem(FOLDER_STORAGE_KEY, dir);
-    } catch {
-      /* ignore */
-    }
+    setOpenedFolderAbsolutePath((prev) => {
+      // Keep the broader workspace folder when the newly-opened file is already
+      // inside it — only narrow the root when the file is outside the current root.
+      if (prev && isPathWithin(diskAbsolutePath, prev)) {
+        return prev;
+      }
+      try {
+        sessionStorage.setItem(FOLDER_STORAGE_KEY, dir);
+      } catch {
+        /* ignore */
+      }
+      return dir;
+    });
   }, [diskAbsolutePath]);
 
   const syncDocumentBaseline = useCallback((html: string) => {

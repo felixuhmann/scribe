@@ -1,28 +1,42 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   CheckIcon,
+  ClipboardListIcon,
   CopyIcon,
   PencilIcon,
   RefreshCwIcon,
+  SendIcon,
   SparklesIcon,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import type { DocumentChatUIMessage } from '@/lib/agents/document-chat-agent';
-import { tryParsePlanAnswersUserText } from '@/lib/plan-answers-protocol';
+import {
+  tryParsePlanAcceptedUserText,
+  tryParsePlanAnswersUserText,
+  tryParsePlanFeedbackUserText,
+  type PlanAnswerPayload,
+  type PlanFeedbackPayload,
+} from '@/lib/plan-answers-protocol';
 import { cn } from '@/lib/utils';
 
 import { PlanAnswersSubmittedBubble } from './plan-clarification-form';
 import { ChatTextPart } from './message-parts/chat-text-part';
 import { ToolSetDocumentHtmlPart } from './message-parts/tool-set-document-html';
 import { ToolClarificationsPart } from './message-parts/tool-clarifications';
-import type { PlanAnswerPayload } from '@/lib/plan-answers-protocol';
+import { ToolWritePlanPart } from './message-parts/tool-write-plan';
 
 type MessageBubbleProps = {
   message: DocumentChatUIMessage;
   isLast: boolean;
   busy: boolean;
   editorReady: boolean;
+  /** 1-based version number for the writePlan part inside this message (if any). */
+  writePlanVersionByMessageId: Map<string, number>;
+  /** Whether THIS message contains the latest writePlan call. */
+  isLatestWritePlanMessage: boolean;
+  onOpenPlan: () => void;
+  onSkipReview: () => void;
   onSubmitPlanAnswers: (payload: PlanAnswerPayload) => void;
   onRetry: () => void;
   onEditUserMessage: () => void;
@@ -39,12 +53,17 @@ function plainTextFromMessage(message: DocumentChatUIMessage): string {
   return texts.join('\n\n').trim();
 }
 
-function isPlanAnswers(message: DocumentChatUIMessage): boolean {
-  if (message.role !== 'user') return false;
+type UserBubbleKind = 'plain' | 'planAnswers' | 'planFeedback' | 'planAccepted';
+
+function classifyUserMessage(message: DocumentChatUIMessage): UserBubbleKind {
+  if (message.role !== 'user') return 'plain';
   for (const p of message.parts) {
-    if (p.type === 'text' && tryParsePlanAnswersUserText(p.text)) return true;
+    if (p.type !== 'text') continue;
+    if (tryParsePlanAnswersUserText(p.text)) return 'planAnswers';
+    if (tryParsePlanFeedbackUserText(p.text)) return 'planFeedback';
+    if (tryParsePlanAcceptedUserText(p.text)) return 'planAccepted';
   }
-  return false;
+  return 'plain';
 }
 
 export function MessageBubble({
@@ -52,6 +71,10 @@ export function MessageBubble({
   isLast,
   busy,
   editorReady,
+  writePlanVersionByMessageId,
+  isLatestWritePlanMessage,
+  onOpenPlan,
+  onSkipReview,
   onSubmitPlanAnswers,
   onRetry,
   onEditUserMessage,
@@ -59,7 +82,10 @@ export function MessageBubble({
   onUndoToolEdit,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
-  const planAnswers = isPlanAnswers(message);
+  const userKind = classifyUserMessage(message);
+  const isStructuredUser = isUser && userKind !== 'plain';
+
+  const writePlanVersion = writePlanVersionByMessageId.get(message.id) ?? 0;
 
   return (
     <li
@@ -78,7 +104,7 @@ export function MessageBubble({
         <div
           className={cn(
             'min-w-0',
-            isUser && !planAnswers
+            isUser && !isStructuredUser
               ? 'bg-primary/10 text-foreground max-w-[85%] rounded-2xl rounded-tr-md px-3 py-2'
               : 'w-full',
           )}
@@ -86,9 +112,23 @@ export function MessageBubble({
           {message.parts.map((part, i) => {
             if (part.type === 'text') {
               if (isUser) {
-                const parsed = tryParsePlanAnswersUserText(part.text);
-                if (parsed) {
-                  return <PlanAnswersSubmittedBubble key={i} payload={parsed} />;
+                if (userKind === 'planAnswers') {
+                  const parsed = tryParsePlanAnswersUserText(part.text);
+                  if (parsed) {
+                    return <PlanAnswersSubmittedBubble key={i} payload={parsed} />;
+                  }
+                }
+                if (userKind === 'planFeedback') {
+                  const parsed = tryParsePlanFeedbackUserText(part.text);
+                  if (parsed) {
+                    return <PlanFeedbackSubmittedBubble key={i} payload={parsed} />;
+                  }
+                }
+                if (userKind === 'planAccepted') {
+                  const parsed = tryParsePlanAcceptedUserText(part.text);
+                  if (parsed) {
+                    return <PlanAcceptedBubble key={i} version={parsed.acceptedVersion} />;
+                  }
                 }
               }
               return <ChatTextPart key={i} text={part.text} role={message.role} />;
@@ -121,6 +161,19 @@ export function MessageBubble({
                 />
               );
             }
+            if (part.type === 'tool-writePlan') {
+              return (
+                <ToolWritePlanPart
+                  key={i}
+                  part={part}
+                  versionNumber={writePlanVersion}
+                  isLatest={isLatestWritePlanMessage}
+                  onOpenPlan={onOpenPlan}
+                  onSkipReview={onSkipReview}
+                  canAct={!busy && editorReady}
+                />
+              );
+            }
             return null;
           })}
         </div>
@@ -132,6 +185,7 @@ export function MessageBubble({
           onRetry={onRetry}
           onEditUserMessage={onEditUserMessage}
           plainText={plainTextFromMessage(message)}
+          isStructuredUser={isStructuredUser}
         />
       </div>
     </li>
@@ -145,6 +199,7 @@ function MessageActions({
   onRetry,
   onEditUserMessage,
   plainText,
+  isStructuredUser,
 }: {
   message: DocumentChatUIMessage;
   isLast: boolean;
@@ -152,6 +207,7 @@ function MessageActions({
   onRetry: () => void;
   onEditUserMessage: () => void;
   plainText: string;
+  isStructuredUser: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -179,7 +235,7 @@ function MessageActions({
         isUser ? 'flex-row-reverse' : 'flex-row',
       )}
     >
-      {plainText ? (
+      {plainText && !isStructuredUser ? (
         <Button
           type="button"
           variant="ghost"
@@ -209,7 +265,7 @@ function MessageActions({
           <RefreshCwIcon aria-hidden className="size-3.5" />
         </Button>
       ) : null}
-      {isUser && isLast && !busy ? (
+      {isUser && isLast && !busy && !isStructuredUser ? (
         <Button
           type="button"
           variant="ghost"
@@ -222,6 +278,53 @@ function MessageActions({
           <PencilIcon aria-hidden className="size-3.5" />
         </Button>
       ) : null}
+    </div>
+  );
+}
+
+/** Compact summary of the user's [SCRIBE_PLAN_FEEDBACK] message. */
+function PlanFeedbackSubmittedBubble({ payload }: { payload: PlanFeedbackPayload }) {
+  const lines = useMemo(() => {
+    const out: string[] = [];
+    for (const c of payload.comments) {
+      if (c.selectionText) {
+        out.push(`On "${c.selectionText.slice(0, 60)}…" — ${c.body}`);
+      } else if (c.blockId === 'doc') {
+        out.push(`Plan-wide — ${c.body}`);
+      } else {
+        out.push(`On ${c.blockId} — ${c.body}`);
+      }
+    }
+    if (payload.freeformNote && payload.freeformNote.trim().length > 0) {
+      out.push(`Note — ${payload.freeformNote.trim()}`);
+    }
+    return out;
+  }, [payload]);
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wide">
+        <SendIcon aria-hidden className="mr-1 inline size-3 align-[-2px]" />
+        Requested changes to v{payload.baseVersion}
+      </p>
+      {lines.length === 0 ? (
+        <p className="text-muted-foreground text-xs">(No comments — see freeform note above.)</p>
+      ) : (
+        <ul className="list-disc pl-4 text-xs leading-snug">
+          {lines.map((line, i) => (
+            <li key={i}>{line}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Compact summary of the user's [SCRIBE_PLAN_ACCEPTED] message. */
+function PlanAcceptedBubble({ version }: { version: number }) {
+  return (
+    <div className="border-primary/30 bg-primary/5 text-foreground inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs">
+      <ClipboardListIcon aria-hidden className="size-3" />
+      <span>Submitted plan v{version} — writing the document.</span>
     </div>
   );
 }

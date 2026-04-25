@@ -80,7 +80,6 @@ async function listExplorerFolderEntries(absRoot: string): Promise<ExplorerFolde
     if (d.isDirectory()) {
       if (EXPLORER_SKIP_DIRS.has(d.name)) continue;
       const children = await listExplorerFolderEntries(full);
-      if (children.length === 0) continue;
       let mtimeMs = 0;
       try {
         const st = await fs.stat(full);

@@ -8,12 +8,14 @@ import {
   AlertTitle,
 } from '@/components/ui/alert';
 import type { DocumentChatUIMessage } from '@/lib/agents/document-chat-agent';
+import type { PlanArtifact } from '@/lib/plan-artifact';
 import type { DocumentChatBundle, StoredChatSession } from '@/src/scribe-ipc-types';
 
 import { ChatHeader } from './chat-header';
 import { chatTitleFromMessages } from './chat-session-title';
 import { DocumentChatSessionView } from './document-chat-session-view';
 import { SessionsRail } from './sessions-rail';
+import type { ChatMode } from './use-document-chat-session';
 
 function parseInitialMessages(raw: unknown): DocumentChatUIMessage[] {
   if (!Array.isArray(raw)) return [];
@@ -124,6 +126,79 @@ export function DocumentChatPanel() {
 
       if (mergeApi) {
         void mergeApi(persistDocumentKey, sessionId, { messages, title, updatedAt });
+      }
+    },
+    [documentKey, saveBundle],
+  );
+
+  const persistPlanArtifact = useCallback(
+    (sessionId: string, artifact: PlanArtifact | null, persistDocumentKey: string) => {
+      const mergeApi = window.scribe?.mergeDocumentChatSession;
+      const value = artifact ?? undefined;
+
+      if (persistDocumentKey === documentKey) {
+        setBundle((prev) => {
+          if (!prev) return prev;
+          const sessions = prev.sessions.map((s) =>
+            s.id === sessionId ? { ...s, planArtifact: value } : s,
+          );
+          const next: DocumentChatBundle = { ...prev, sessions };
+          saveBundle(next);
+          return next;
+        });
+        return;
+      }
+
+      if (mergeApi) {
+        void mergeApi(persistDocumentKey, sessionId, { planArtifact: value });
+      }
+    },
+    [documentKey, saveBundle],
+  );
+
+  const persistChatMode = useCallback(
+    (sessionId: string, mode: ChatMode, persistDocumentKey: string) => {
+      const mergeApi = window.scribe?.mergeDocumentChatSession;
+
+      if (persistDocumentKey === documentKey) {
+        setBundle((prev) => {
+          if (!prev) return prev;
+          const sessions = prev.sessions.map((s) =>
+            s.id === sessionId ? { ...s, chatMode: mode } : s,
+          );
+          const next: DocumentChatBundle = { ...prev, sessions };
+          saveBundle(next);
+          return next;
+        });
+        return;
+      }
+
+      if (mergeApi) {
+        void mergeApi(persistDocumentKey, sessionId, { chatMode: mode });
+      }
+    },
+    [documentKey, saveBundle],
+  );
+
+  const persistPlanDepth = useCallback(
+    (sessionId: string, depthSelection: string, persistDocumentKey: string) => {
+      const mergeApi = window.scribe?.mergeDocumentChatSession;
+
+      if (persistDocumentKey === documentKey) {
+        setBundle((prev) => {
+          if (!prev) return prev;
+          const sessions = prev.sessions.map((s) =>
+            s.id === sessionId ? { ...s, planDepthSelection: depthSelection } : s,
+          );
+          const next: DocumentChatBundle = { ...prev, sessions };
+          saveBundle(next);
+          return next;
+        });
+        return;
+      }
+
+      if (mergeApi) {
+        void mergeApi(persistDocumentKey, sessionId, { planDepthSelection: depthSelection });
       }
     },
     [documentKey, saveBundle],
@@ -341,9 +416,21 @@ export function DocumentChatPanel() {
             initialLastAgentDocumentHtml={
               effectiveBundle.sessions.find((s) => s.id === activeSessionId)?.lastAgentDocumentHtml
             }
+            initialPlanArtifact={
+              effectiveBundle.sessions.find((s) => s.id === activeSessionId)?.planArtifact
+            }
+            initialChatMode={
+              effectiveBundle.sessions.find((s) => s.id === activeSessionId)?.chatMode
+            }
+            initialPlanDepthSelection={
+              effectiveBundle.sessions.find((s) => s.id === activeSessionId)?.planDepthSelection
+            }
             editorReady={editorReady}
             onPersistSession={persistSession}
             onPersistAgentSnapshot={persistAgentSnapshot}
+            onPersistPlanArtifact={persistPlanArtifact}
+            onPersistChatMode={persistChatMode}
+            onPersistPlanDepth={persistPlanDepth}
           />
         ) : (
           <p className="text-muted-foreground text-xs">Loading chats…</p>

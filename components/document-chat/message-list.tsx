@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,8 @@ type MessageListProps = {
   editorReady: boolean;
   streamingPhase: StreamingPhase;
   onSubmitPlanAnswers: (payload: PlanAnswerPayload) => void;
+  onOpenPlan: () => void;
+  onSkipReview: () => void;
   onRetry: () => void;
   onEditUserMessage: () => void;
   getPreEditHtml: (toolCallId: string) => string | undefined;
@@ -28,6 +30,7 @@ const STREAM_LABEL: Record<StreamingPhase, string | null> = {
   idle: null,
   thinking: 'Thinking',
   writing: 'Writing',
+  writingPlan: 'Writing plan',
   applyingEdit: 'Applying edit',
   draftingQuestions: 'Drafting questions',
 };
@@ -38,12 +41,40 @@ export function MessageList({
   editorReady,
   streamingPhase,
   onSubmitPlanAnswers,
+  onOpenPlan,
+  onSkipReview,
   onRetry,
   onEditUserMessage,
   getPreEditHtml,
   onUndoToolEdit,
   emptyState,
 }: MessageListProps) {
+  /**
+   * Walk the messages once to assign each `tool-writePlan` part a 1-based
+   * version number (across all messages) and find which message contains the
+   * latest plan call. The bubble uses these to render "Plan vN" labels and to
+   * decide whether to show the active "Open plan" CTA vs a historical chip.
+   */
+  const { versionByMessageId, latestWritePlanMessageId } = useMemo(() => {
+    const map = new Map<string, number>();
+    let count = 0;
+    let latest: string | null = null;
+    for (const m of messages) {
+      if (m.role !== 'assistant') continue;
+      let messageHasPlan = false;
+      for (const p of m.parts) {
+        if (p.type !== 'tool-writePlan') continue;
+        if (p.state !== 'output-available') continue;
+        count += 1;
+        messageHasPlan = true;
+      }
+      if (messageHasPlan) {
+        map.set(m.id, count);
+        latest = m.id;
+      }
+    }
+    return { versionByMessageId: map, latestWritePlanMessageId: latest };
+  }, [messages]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(true);
@@ -118,6 +149,10 @@ export function MessageList({
                 isLast={idx === messages.length - 1}
                 busy={busy}
                 editorReady={editorReady}
+                writePlanVersionByMessageId={versionByMessageId}
+                isLatestWritePlanMessage={m.id === latestWritePlanMessageId}
+                onOpenPlan={onOpenPlan}
+                onSkipReview={onSkipReview}
                 onSubmitPlanAnswers={onSubmitPlanAnswers}
                 onRetry={onRetry}
                 onEditUserMessage={onEditUserMessage}

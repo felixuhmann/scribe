@@ -4,13 +4,23 @@ import type { WebContents } from 'electron';
 import {
   clampPlanRefinementRounds,
   countPlanAnswerMessages,
+  countPlanFeedbackMessages,
   createDocumentChatAgent,
+  findLatestPlanFeedback,
   shouldForcePlanClarificationRound,
+  shouldForcePlanExecute,
+  shouldForcePlanWrite,
   type DocumentChatMode,
   type DocumentChatUIMessage,
   type PlanDepthMode,
+  type PlanForceMode,
 } from '../../../lib/agents/document-chat-agent';
 import { documentChatTools } from '../../../lib/agents/document-chat-tools';
+import {
+  type PlanBlock,
+  planVersionToText,
+  type PlanVersion,
+} from '../../../lib/plan-artifact';
 import { providerForModel } from '../../../lib/llm';
 import {
   missingApiKeyErrorMessage,
@@ -23,6 +33,40 @@ import { sendEvent } from '../../ipc/main-register';
 const DOCUMENT_CHAT_MAX_OUTPUT_TOKENS = 8192;
 
 const abortControllers = new Map<string, AbortController>();
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === 'object';
+}
+
+/**
+ * Walk the message stream and pull the most recent completed `tool-writePlan`
+ * output. We mirror the renderer-side artifact reconstruction here so the
+ * model sees the same plan the user is reviewing — without piping the full
+ * `PlanArtifact` over IPC.
+ */
+function findLatestWrittenPlan(messages: unknown[]): {
+  versionNumber: number;
+  blocks: PlanBlock[];
+} | null {
+  if (!Array.isArray(messages)) return null;
+  let count = 0;
+  let latest: { versionNumber: number; blocks: PlanBlock[] } | null = null;
+  for (const m of messages) {
+    if (!isRecord(m) || m.role !== 'assistant') continue;
+    const parts = m.parts;
+    if (!Array.isArray(parts)) continue;
+    for (const p of parts) {
+      if (!isRecord(p)) continue;
+      if (p.type !== 'tool-writePlan') continue;
+      if (p.state !== 'output-available') continue;
+      const out = p.output;
+      if (!isRecord(out) || !Array.isArray(out.blocks)) continue;
+      count += 1;
+      latest = { versionNumber: count, blocks: out.blocks as PlanBlock[] };
+    }
+  }
+  return latest;
+}
 
 /** `createUIMessageStream` returns `ReadableStream`; `createAgentUIStream` returns async-iterable streams. */
 async function* uiChunksFromStream(
@@ -91,6 +135,41 @@ export async function runDocumentChatSession(options: {
   const planDepthMode: PlanDepthMode = planDepthModeOpt ?? 'fixed';
   const planRefinementRounds = clampPlanRefinementRounds(planRefinementRoundsOpt);
   const planAnswerCount = mode === 'plan' ? countPlanAnswerMessages(messages) : 0;
+  const planFeedbackCount = mode === 'plan' ? countPlanFeedbackMessages(messages) : 0;
+
+  /** Force the right tool on step 0 based on the latest user message. */
+  let planForceMode: PlanForceMode = 'none';
+  if (mode === 'plan') {
+    if (shouldForcePlanExecute(messages, mode)) {
+      planForceMode = 'setDocumentHtml';
+    } else if (
+      shouldForcePlanClarificationRound(messages, mode, {
+        planDepthMode,
+        planRefinementRounds,
+      })
+    ) {
+      planForceMode = 'requestClarifications';
+    } else if (
+      shouldForcePlanWrite(messages, mode, {
+        planDepthMode,
+        planRefinementRounds,
+      })
+    ) {
+      planForceMode = 'writePlan';
+    }
+  }
+
+  /** Latest plan + open feedback for PLAN_REVIEW_STATE. */
+  const latestPlan = mode === 'plan' ? findLatestWrittenPlan(messages) : null;
+  const latestFeedback = mode === 'plan' ? findLatestPlanFeedback(messages) : null;
+  const latestPlanText = latestPlan
+    ? planVersionToText({
+        versionId: '',
+        versionNumber: latestPlan.versionNumber,
+        createdAt: 0,
+        blocks: latestPlan.blocks,
+      } satisfies PlanVersion)
+    : '';
 
   try {
     const agent = createDocumentChatAgent({
@@ -101,15 +180,8 @@ export async function runDocumentChatSession(options: {
       planDepthMode: mode === 'plan' ? planDepthMode : undefined,
     });
 
-    const planForceRequestClarifications =
-      mode === 'plan' &&
-      shouldForcePlanClarificationRound(messages, mode, {
-        planDepthMode,
-        planRefinementRounds,
-      });
-
     // Always validate / convert with the full tool set so sessions that used plan mode
-    // (requestClarifications in history) still validate after switching to edit mode.
+    // (requestClarifications / writePlan in history) still validate after switching to edit mode.
     const validatedMessages = await validateUIMessages<DocumentChatUIMessage>({
       messages,
       tools: documentChatTools,
@@ -124,10 +196,15 @@ export async function runDocumentChatSession(options: {
       options: {
         documentHtml,
         documentChangeSummary,
-        planForceRequestClarifications,
+        planForceMode,
         planRefinementRounds,
         planAnswerCount,
+        planFeedbackCount,
         planDepthMode,
+        planCurrentVersion: latestPlan?.versionNumber ?? 0,
+        planLatestText: latestPlanText,
+        planOpenComments: latestFeedback?.comments ?? [],
+        planFeedbackNote: latestFeedback?.freeformNote,
       },
       abortSignal: controller.signal,
     });

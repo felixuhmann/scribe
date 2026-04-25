@@ -8,11 +8,14 @@ import {
 } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import type { DocumentChatUIMessage } from '@/lib/agents/document-chat-agent';
+import type { PlanArtifact } from '@/lib/plan-artifact';
+
+import { PlanReviewOverlay } from '@/components/plan-review/plan-review-overlay';
 
 import { Composer, type ComposerHandle } from './composer';
 import { MessageList } from './message-list';
 import { SuggestionChips } from './suggestion-chips';
-import { useDocumentChatSession } from './use-document-chat-session';
+import { useDocumentChatSession, type ChatMode } from './use-document-chat-session';
 
 type DocumentChatSessionViewProps = {
   sessionId: string;
@@ -20,6 +23,9 @@ type DocumentChatSessionViewProps = {
   documentLabel: string;
   initialMessages: DocumentChatUIMessage[];
   initialLastAgentDocumentHtml?: string;
+  initialPlanArtifact?: unknown;
+  initialChatMode?: ChatMode;
+  initialPlanDepthSelection?: string;
   editorReady: boolean;
   onPersistSession: (
     sessionId: string,
@@ -27,6 +33,21 @@ type DocumentChatSessionViewProps = {
     persistDocumentKey: string,
   ) => void;
   onPersistAgentSnapshot: (sessionId: string, html: string, persistDocumentKey: string) => void;
+  onPersistPlanArtifact: (
+    sessionId: string,
+    artifact: PlanArtifact | null,
+    persistDocumentKey: string,
+  ) => void;
+  onPersistChatMode: (
+    sessionId: string,
+    mode: ChatMode,
+    persistDocumentKey: string,
+  ) => void;
+  onPersistPlanDepth: (
+    sessionId: string,
+    depthSelection: string,
+    persistDocumentKey: string,
+  ) => void;
 };
 
 export function DocumentChatSessionView(props: DocumentChatSessionViewProps) {
@@ -47,11 +68,22 @@ export function DocumentChatSessionView(props: DocumentChatSessionViewProps) {
     persistChatModel,
     sendPrompt,
     sendPlanAnswers,
+    sendPlanFeedback,
+    sendPlanAccepted,
     retryAssistant,
     popLastUserMessageForEdit,
     undoToolEdit,
     getPreEditHtml,
     stop,
+    planArtifact,
+    setPlanCurrentVersion,
+    planReviewOpen,
+    setPlanReviewOpen,
+    stagedComments,
+    addStagedComment,
+    removeStagedComment,
+    freeformFeedback,
+    setFreeformFeedback,
   } = useDocumentChatSession(props);
 
   const [draft, setDraft] = useState('');
@@ -88,6 +120,15 @@ export function DocumentChatSessionView(props: DocumentChatSessionViewProps) {
       form.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, []);
+
+  const handleOpenPlan = useCallback(() => {
+    if (!planArtifact || planArtifact.versions.length === 0) return;
+    setPlanReviewOpen(true);
+  }, [planArtifact, setPlanReviewOpen]);
+
+  const handleSkipReview = useCallback(() => {
+    sendPlanAccepted();
+  }, [sendPlanAccepted]);
 
   const emptyState = (
     <EmptyState
@@ -130,6 +171,8 @@ export function DocumentChatSessionView(props: DocumentChatSessionViewProps) {
           editorReady={editorReady}
           streamingPhase={streamingPhase}
           onSubmitPlanAnswers={sendPlanAnswers}
+          onOpenPlan={handleOpenPlan}
+          onSkipReview={handleSkipReview}
           onRetry={handleRetry}
           onEditUserMessage={handleEditUserMessage}
           getPreEditHtml={getPreEditHtml}
@@ -157,6 +200,23 @@ export function DocumentChatSessionView(props: DocumentChatSessionViewProps) {
         chatModel={chatModel}
         onChatModelChange={persistChatModel}
       />
+
+      {planArtifact && planArtifact.versions.length > 0 ? (
+        <PlanReviewOverlay
+          open={planReviewOpen}
+          onOpenChange={setPlanReviewOpen}
+          artifact={planArtifact}
+          busy={busy}
+          stagedComments={stagedComments}
+          freeformFeedback={freeformFeedback}
+          onChangeFreeformFeedback={setFreeformFeedback}
+          onAddComment={addStagedComment}
+          onRemoveStagedComment={removeStagedComment}
+          onSetCurrentVersion={setPlanCurrentVersion}
+          onRequestChanges={sendPlanFeedback}
+          onSubmitPlan={sendPlanAccepted}
+        />
+      ) : null}
     </>
   );
 }
@@ -180,8 +240,8 @@ function EmptyState({
   const subtitle =
     chatMode === 'plan'
       ? planDepthIsAuto
-        ? 'Plan (Auto) will ask as many clarification rounds as it needs, then apply changes.'
-        : `Plan will run ${planRefinementRounds} clarification round${planRefinementRounds === 1 ? '' : 's'} before applying changes.`
+        ? 'Plan (Auto) will ask as many clarification rounds as it needs (covering both content and voice/style), then write a reviewable plan.'
+        : `Plan will run ${planRefinementRounds} clarification round${planRefinementRounds === 1 ? '' : 's'} (covering both content and voice/style), then write a reviewable plan you can comment on before applying changes.`
       : 'Ask about this document or request edits. The assistant can rewrite the full document when you want changes applied.';
 
   return (

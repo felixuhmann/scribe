@@ -60,6 +60,12 @@ function normalizeBundle(raw: unknown): DocumentChatBundle {
     const lastAgentDocumentHtml =
       typeof r.lastAgentDocumentHtml === 'string' ? r.lastAgentDocumentHtml : undefined;
     const archived = r.archived === true;
+    const planArtifact =
+      r.planArtifact && typeof r.planArtifact === 'object' ? r.planArtifact : undefined;
+    const chatMode =
+      r.chatMode === 'edit' || r.chatMode === 'plan' ? r.chatMode : undefined;
+    const planDepthSelection =
+      typeof r.planDepthSelection === 'string' ? r.planDepthSelection : undefined;
     return {
       id,
       title,
@@ -67,6 +73,9 @@ function normalizeBundle(raw: unknown): DocumentChatBundle {
       updatedAt,
       ...(archived ? { archived: true } : {}),
       ...(lastAgentDocumentHtml !== undefined ? { lastAgentDocumentHtml } : {}),
+      ...(planArtifact !== undefined ? { planArtifact } : {}),
+      ...(chatMode !== undefined ? { chatMode } : {}),
+      ...(planDepthSelection !== undefined ? { planDepthSelection } : {}),
     };
   });
   let activeSessionId =
@@ -124,6 +133,9 @@ function applySessionPatch(s: StoredChatSession, patch: DocumentChatSessionMerge
   if (patch.lastAgentDocumentHtml !== undefined) {
     next.lastAgentDocumentHtml = patch.lastAgentDocumentHtml;
   }
+  if (patch.planArtifact !== undefined) next.planArtifact = patch.planArtifact;
+  if (patch.chatMode !== undefined) next.chatMode = patch.chatMode;
+  if (patch.planDepthSelection !== undefined) next.planDepthSelection = patch.planDepthSelection;
   return next;
 }
 
@@ -164,6 +176,17 @@ export async function mergeDocumentChatSession(
     const rawBundle = file.documents[key];
     let norm: DocumentChatBundle;
 
+    const extras = {
+      ...(patch.lastAgentDocumentHtml !== undefined
+        ? { lastAgentDocumentHtml: patch.lastAgentDocumentHtml }
+        : {}),
+      ...(patch.planArtifact !== undefined ? { planArtifact: patch.planArtifact } : {}),
+      ...(patch.chatMode !== undefined ? { chatMode: patch.chatMode } : {}),
+      ...(patch.planDepthSelection !== undefined
+        ? { planDepthSelection: patch.planDepthSelection }
+        : {}),
+    };
+
     if (!rawBundle) {
       const now = Date.now();
       const messages = patch.messages !== undefined ? patch.messages : [];
@@ -174,9 +197,7 @@ export async function mergeDocumentChatSession(
         title,
         messages,
         updatedAt,
-        ...(patch.lastAgentDocumentHtml !== undefined
-          ? { lastAgentDocumentHtml: patch.lastAgentDocumentHtml }
-          : {}),
+        ...extras,
       };
       norm = { activeSessionId: sessionId, sessions: [session] };
     } else {
@@ -189,9 +210,7 @@ export async function mergeDocumentChatSession(
           title: patch.title?.trim() ? patch.title.trim() : 'New chat',
           messages: patch.messages !== undefined ? patch.messages : [],
           updatedAt: patch.updatedAt ?? now,
-          ...(patch.lastAgentDocumentHtml !== undefined
-            ? { lastAgentDocumentHtml: patch.lastAgentDocumentHtml }
-            : {}),
+          ...extras,
         };
         norm = { ...norm, sessions: [...norm.sessions, session] };
       } else {

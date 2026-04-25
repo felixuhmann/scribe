@@ -55,6 +55,17 @@ export type StoredChatSession = {
   archived?: boolean;
   /** Editor HTML after the last completed assistant turn — used to diff user edits before the next message. */
   lastAgentDocumentHtml?: string;
+  /**
+   * Plan-mode review artifact: versions are derived from `tool-writePlan` parts
+   * in `messages`, but user-authored comments and review status live here. Stored
+   * as `unknown` to keep this type free of `lib/plan-artifact` imports; the
+   * renderer narrows it via the schema there.
+   */
+  planArtifact?: unknown;
+  /** `'edit'` | `'plan'` — last selected chat mode for this session. */
+  chatMode?: 'edit' | 'plan';
+  /** `'auto'` or `'1'`–`'8'` — last selected plan depth for this session. */
+  planDepthSelection?: string;
 };
 
 export type DocumentChatBundle = {
@@ -68,6 +79,9 @@ export type DocumentChatSessionMergePatch = {
   title?: string;
   updatedAt?: number;
   lastAgentDocumentHtml?: string;
+  planArtifact?: unknown;
+  chatMode?: 'edit' | 'plan';
+  planDepthSelection?: string;
 };
 
 export type OpenDocumentResult =

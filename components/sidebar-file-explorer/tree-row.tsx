@@ -90,6 +90,7 @@ function RenameInput({
 }) {
   const [value, setValue] = useState(initialValue);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const committedRef = useRef(false);
 
   useLayoutEffect(() => {
     const input = inputRef.current;
@@ -103,6 +104,13 @@ function RenameInput({
     }
   }, [initialValue]);
 
+  const commit = (kind: 'submit' | 'cancel', next?: string) => {
+    if (committedRef.current) return;
+    committedRef.current = true;
+    if (kind === 'cancel') onCancel();
+    else if (next !== undefined) onSubmit(next);
+  };
+
   return (
     <input
       ref={inputRef}
@@ -112,18 +120,18 @@ function RenameInput({
       onChange={(e) => setValue(e.target.value)}
       onBlur={() => {
         const trimmed = value.trim();
-        if (trimmed === '' || trimmed === initialValue) onCancel();
-        else onSubmit(trimmed);
+        if (trimmed === '' || trimmed === initialValue) commit('cancel');
+        else commit('submit', trimmed);
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
           const trimmed = value.trim();
-          if (trimmed === '' || trimmed === initialValue) onCancel();
-          else onSubmit(trimmed);
+          if (trimmed === '' || trimmed === initialValue) commit('cancel');
+          else commit('submit', trimmed);
         } else if (e.key === 'Escape') {
           e.preventDefault();
-          onCancel();
+          commit('cancel');
         }
         e.stopPropagation();
       }}
