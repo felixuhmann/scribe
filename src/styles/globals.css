@@ -287,6 +287,22 @@
   padding-left: 1.4em;
 }
 
+.scribe-editor-content .ProseMirror ul {
+  list-style: disc outside;
+}
+
+.scribe-editor-content .ProseMirror ol {
+  list-style: decimal outside;
+}
+
+.scribe-editor-content .ProseMirror ul ul {
+  list-style-type: circle;
+}
+
+.scribe-editor-content .ProseMirror ul ul ul {
+  list-style-type: square;
+}
+
 .scribe-editor-content .ProseMirror ul li::marker {
   color: var(--scribe-prose-muted);
 }
