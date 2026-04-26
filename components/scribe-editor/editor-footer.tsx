@@ -9,7 +9,7 @@ export type ScribeEditorFooterProps = {
 };
 
 export function ScribeEditorFooter({ autocompleteEnabled }: ScribeEditorFooterProps) {
-  const { wordCount } = useEditorChromeState();
+  const { wordCount, selectionWordCount } = useEditorChromeState();
 
   return (
     <footer
@@ -19,6 +19,14 @@ export function ScribeEditorFooter({ autocompleteEnabled }: ScribeEditorFooterPr
       <p className="text-muted-foreground flex min-w-0 flex-1 items-center gap-3 text-[11px] tabular-nums">
         <span className="truncate">
           {wordCount.toLocaleString()} {wordCount === 1 ? 'word' : 'words'}
+          {selectionWordCount > 0 && (
+            <>
+              {' '}
+              <span className="text-muted-foreground/60">
+                ({selectionWordCount.toLocaleString()} selected)
+              </span>
+            </>
+          )}
         </span>
       </p>
 

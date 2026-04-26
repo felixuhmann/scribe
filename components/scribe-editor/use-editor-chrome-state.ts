@@ -28,6 +28,7 @@ export function useEditorChromeState() {
           blockStyle: 'p' as BlockStyle,
           textAlign: 'left' as AlignValue,
           wordCount: 0,
+          selectionWordCount: 0,
         };
       }
       const blockStyle: BlockStyle = ed.isActive('heading', { level: 1 })
@@ -45,6 +46,8 @@ export function useEditorChromeState() {
             ? 'center'
             : 'left';
       const text = ed.state.doc.textContent;
+      const { from, to, empty } = ed.state.selection;
+      const selectionText = empty ? '' : ed.state.doc.textBetween(from, to, ' ', ' ');
       return {
         canUndo: ed.can().undo(),
         canRedo: ed.can().redo(),
@@ -56,6 +59,7 @@ export function useEditorChromeState() {
         blockStyle,
         textAlign,
         wordCount: text.split(/\s+/).filter(Boolean).length,
+        selectionWordCount: selectionText.split(/\s+/).filter(Boolean).length,
       };
     },
   });
@@ -71,6 +75,7 @@ export function useEditorChromeState() {
     blockStyle,
     textAlign,
     wordCount,
+    selectionWordCount,
   } = tool ?? {
     canUndo: false,
     canRedo: false,
@@ -82,6 +87,7 @@ export function useEditorChromeState() {
     blockStyle: 'p' as const,
     textAlign: 'left' as const,
     wordCount: 0,
+    selectionWordCount: 0,
   };
 
   const markValues = useMemo(
@@ -110,5 +116,6 @@ export function useEditorChromeState() {
     textAlign,
     markValues,
     wordCount,
+    selectionWordCount,
   };
 }
