@@ -22,8 +22,9 @@ import { cn } from '@/lib/utils';
 
 import { PlanAnswersSubmittedBubble } from './plan-clarification-form';
 import { ChatTextPart } from './message-parts/chat-text-part';
-import { ToolSetDocumentHtmlPart } from './message-parts/tool-set-document-html';
+import { ToolApplyDocumentEditsPart } from './message-parts/tool-apply-document-edits';
 import { ToolClarificationsPart } from './message-parts/tool-clarifications';
+import { ToolDocumentActionPart } from './message-parts/tool-document-actions';
 import { ToolWritePlanPart } from './message-parts/tool-write-plan';
 
 type MessageBubbleProps = {
@@ -40,7 +41,7 @@ type MessageBubbleProps = {
   onSubmitPlanAnswers: (payload: PlanAnswerPayload) => void;
   onRetry: () => void;
   onEditUserMessage: () => void;
-  /** Pre-apply HTML keyed by toolCallId for the setDocumentHtml Undo. */
+  /** Pre-apply HTML keyed by toolCallId for the applyDocumentEdits Undo. */
   getPreEditHtml: (toolCallId: string) => string | undefined;
   onUndoToolEdit: (toolCallId: string) => void;
 };
@@ -133,12 +134,12 @@ export function MessageBubble({
               }
               return <ChatTextPart key={i} text={part.text} role={message.role} />;
             }
-            if (part.type === 'tool-setDocumentHtml') {
+            if (part.type === 'tool-applyDocumentEdits') {
               const toolCallId =
                 'toolCallId' in part && typeof part.toolCallId === 'string' ? part.toolCallId : '';
               return (
                 <div key={i} className="mt-2">
-                  <ToolSetDocumentHtmlPart
+                  <ToolApplyDocumentEditsPart
                     part={part}
                     previousHtml={toolCallId ? getPreEditHtml(toolCallId) : undefined}
                     canUndo={Boolean(toolCallId) && getPreEditHtml(toolCallId) !== undefined}
@@ -148,6 +149,15 @@ export function MessageBubble({
                   />
                 </div>
               );
+            }
+            if (
+              part.type === 'tool-getDocumentStats' ||
+              part.type === 'tool-readDocument' ||
+              part.type === 'tool-searchDocument' ||
+              part.type === 'tool-strReplace' ||
+              part.type === 'tool-appendDocument'
+            ) {
+              return <ToolDocumentActionPart key={i} part={part} />;
             }
             if (part.type === 'tool-requestClarifications') {
               const interactive = message.role === 'assistant' && isLast && !busy;

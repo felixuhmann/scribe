@@ -22,7 +22,7 @@ import {
 import { OPENAI_MODELS } from '@/lib/llm';
 
 import { ElectronIpcChatTransport } from './electron-ipc-chat-transport';
-import { getSetDocumentOutput } from './message-parts/tool-set-document-html';
+import { getApplyEditsOutput } from './message-parts/tool-apply-document-edits';
 
 export type ChatMode = 'edit' | 'plan';
 
@@ -351,7 +351,7 @@ export function useDocumentChatSession({
       for (const message of messages) {
         if (message.role !== 'assistant') continue;
         for (const part of message.parts) {
-          const payload = getSetDocumentOutput(part);
+          const payload = getApplyEditsOutput(part);
           if (!payload?.html) continue;
           const id = 'toolCallId' in part && typeof part.toolCallId === 'string' ? part.toolCallId : '';
           if (id) appliedToolIds.current.add(id);
@@ -364,16 +364,21 @@ export function useDocumentChatSession({
     for (const message of messages) {
       if (message.role !== 'assistant') continue;
       for (const part of message.parts) {
-        const payload = getSetDocumentOutput(part);
+        const payload = getApplyEditsOutput(part);
         if (!payload?.html) continue;
         const id = 'toolCallId' in part && typeof part.toolCallId === 'string' ? part.toolCallId : '';
         if (!id || appliedToolIds.current.has(id)) continue;
+        /** No actual edits to apply — skip but still mark seen so we don't reprocess. */
+        if (payload.editCount === 0) {
+          appliedToolIds.current.add(id);
+          continue;
+        }
         // Capture the HTML *immediately before* the edit is applied, so Undo can restore the exact pre-edit state.
         preEditByToolIdRef.current.set(id, editor.getHTML());
         appliedToolIds.current.add(id);
         editor.chain().focus().setContent(payload.html, { emitUpdate: true }).run();
         /**
-         * After setDocumentHtml lands following a [SCRIBE_PLAN_ACCEPTED] turn, mark the artifact
+         * After applyDocumentEdits lands following a [SCRIBE_PLAN_ACCEPTED] turn, mark the artifact
          * superseded and persist. We detect "after acceptance" by checking artifact.status.
          */
         const current = planArtifactRef.current;
@@ -413,33 +418,23 @@ export function useDocumentChatSession({
     if (status !== 'streaming') return 'idle';
     const last = messages[messages.length - 1];
     if (!last || last.role !== 'assistant') return 'thinking';
-    let hasInProgressSetDoc = false;
+    let hasInProgressApply = false;
+    let hasInProgressEdit = false;
     let hasInProgressClarify = false;
     let hasInProgressWritePlan = false;
+    const isInFlight = (state: string) => state !== 'output-available' && state !== 'output-error';
     for (const p of last.parts) {
+      if (p.type === 'tool-applyDocumentEdits' && isInFlight(p.state)) hasInProgressApply = true;
       if (
-        p.type === 'tool-setDocumentHtml' &&
-        p.state !== 'output-available' &&
-        p.state !== 'output-error'
+        (p.type === 'tool-strReplace' || p.type === 'tool-appendDocument') &&
+        isInFlight(p.state)
       ) {
-        hasInProgressSetDoc = true;
+        hasInProgressEdit = true;
       }
-      if (
-        p.type === 'tool-requestClarifications' &&
-        p.state !== 'output-available' &&
-        p.state !== 'output-error'
-      ) {
-        hasInProgressClarify = true;
-      }
-      if (
-        p.type === 'tool-writePlan' &&
-        p.state !== 'output-available' &&
-        p.state !== 'output-error'
-      ) {
-        hasInProgressWritePlan = true;
-      }
+      if (p.type === 'tool-requestClarifications' && isInFlight(p.state)) hasInProgressClarify = true;
+      if (p.type === 'tool-writePlan' && isInFlight(p.state)) hasInProgressWritePlan = true;
     }
-    if (hasInProgressSetDoc) return 'applyingEdit';
+    if (hasInProgressApply || hasInProgressEdit) return 'applyingEdit';
     if (hasInProgressWritePlan) return 'writingPlan';
     if (hasInProgressClarify) return 'draftingQuestions';
     return 'writing';
@@ -543,7 +538,7 @@ export function useDocumentChatSession({
   /**
    * Accept the current plan: mark the artifact accepted, close the overlay, and
    * send `[SCRIBE_PLAN_ACCEPTED]`. The agent's next step is forced into
-   * setDocumentHtml in the main process.
+   * `getDocumentStats` in the main process, and the agentic edit loop runs.
    */
   const sendPlanAccepted = useCallback(() => {
     if (busy || !editorReady) return;
@@ -583,7 +578,7 @@ export function useDocumentChatSession({
 
   /**
    * Revert the editor to the exact HTML captured right before this tool call applied
-   * its `setDocumentHtml` output. Returns true when a snapshot existed and was applied.
+   * its `applyDocumentEdits` output. Returns true when a snapshot existed and was applied.
    */
   const undoToolEdit = useCallback((toolCallId: string): boolean => {
     const prev = preEditByToolIdRef.current.get(toolCallId);
