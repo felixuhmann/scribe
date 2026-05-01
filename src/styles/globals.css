@@ -399,6 +399,29 @@
   pointer-events: none;
 }
 
+/* In-document find: highlight every match, with a stronger style on the active one. */
+.scribe-editor-content .ProseMirror .scribe-search-match {
+  background: color-mix(in oklab, oklch(0.92 0.16 96) 75%, transparent);
+  color: inherit;
+  border-radius: 0.15rem;
+  box-shadow: 0 0 0 1px color-mix(in oklab, oklch(0.78 0.18 88) 60%, transparent);
+}
+
+.scribe-editor-content .ProseMirror .scribe-search-match-current {
+  background: color-mix(in oklab, oklch(0.84 0.18 60) 90%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, oklch(0.6 0.2 50) 75%, transparent);
+}
+
+.dark .scribe-editor-content .ProseMirror .scribe-search-match {
+  background: color-mix(in oklab, oklch(0.62 0.18 90) 45%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, oklch(0.7 0.2 90) 60%, transparent);
+}
+
+.dark .scribe-editor-content .ProseMirror .scribe-search-match-current {
+  background: color-mix(in oklab, oklch(0.68 0.22 55) 75%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, oklch(0.78 0.22 55) 80%, transparent);
+}
+
 /* Tab-autocomplete ghost text */
 .scribe-editor-content .ProseMirror .scribe-tab-autocomplete {
   display: inline;

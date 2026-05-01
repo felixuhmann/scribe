@@ -40,6 +40,10 @@ type EditorSessionValue = {
   isCommandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
   toggleCommandPalette: () => void;
+  /** Find-in-document bar open state. */
+  isSearchBarOpen: boolean;
+  setSearchBarOpen: (open: boolean) => void;
+  toggleSearchBar: () => void;
   /** Persisted canvas-view preferences (focus mode, typewriter, paper, zoom). */
   canvas: CanvasPreferencesApi;
   /**
@@ -64,6 +68,7 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
 
   const [isFormattingToolbarOpen, setFormattingToolbarOpen] = useState(false);
   const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [isSearchBarOpen, setSearchBarOpen] = useState(false);
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(true);
   const toggleAutocompleteHandlerRef = useRef<(() => void | Promise<void>) | null>(null);
   const canvas = useEditorCanvasPreferences();
@@ -119,6 +124,7 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
     [],
   );
   const toggleCommandPalette = useCallback(() => setCommandPaletteOpen((v) => !v), []);
+  const toggleSearchBar = useCallback(() => setSearchBarOpen((v) => !v), []);
 
   const registerToggleAutocompleteHandler = useCallback(
     (handler: () => void | Promise<void>) => {
@@ -156,6 +162,9 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
       isCommandPaletteOpen,
       setCommandPaletteOpen,
       toggleCommandPalette,
+      isSearchBarOpen,
+      setSearchBarOpen,
+      toggleSearchBar,
       canvas,
       autocompleteEnabled,
       setAutocompleteState,
@@ -175,6 +184,8 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
       toggleFormattingToolbar,
       isCommandPaletteOpen,
       toggleCommandPalette,
+      isSearchBarOpen,
+      toggleSearchBar,
       canvas,
       autocompleteEnabled,
       setAutocompleteState,

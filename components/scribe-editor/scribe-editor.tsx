@@ -11,6 +11,7 @@ import { BlockDragHandle } from './block-drag-handle';
 import { AUTOCOMPLETE_DEBOUNCE_MS, DEFAULT_DOC, EDITOR_EXTENSIONS } from './constants';
 import { EditorFormattingToolbar } from './editor-formatting-toolbar';
 import { ScribeEditorFooter } from './editor-footer';
+import { EditorSearchBar } from './editor-search-bar';
 import { LinkHoverCard } from './link-hover-card';
 import { useEditorChromeState } from './use-editor-chrome-state';
 import { EditorSelectionMenus } from './editor-selection-menus';
@@ -43,6 +44,8 @@ function ScribeEditorInner({ editor }: { editor: Editor }) {
     registerSettingsSavedHandler,
     requestOpenLinkDialog,
     isFormattingToolbarOpen,
+    isSearchBarOpen,
+    setSearchBarOpen,
     canvas,
     setAutocompleteState,
     registerToggleAutocompleteHandler,
@@ -132,7 +135,7 @@ function ScribeEditorInner({ editor }: { editor: Editor }) {
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
       <Tiptap editor={editor}>
-        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {isFormattingToolbarOpen ? (
             <EditorFormattingToolbar
               {...formattingChrome}
@@ -140,6 +143,11 @@ function ScribeEditorInner({ editor }: { editor: Editor }) {
               onOpenLink={requestOpenLinkDialog}
             />
           ) : null}
+          <EditorSearchBar
+            editor={editor}
+            open={isSearchBarOpen}
+            onClose={() => setSearchBarOpen(false)}
+          />
           <div
             ref={canvasRef}
             className={cn('scribe-editor-canvas relative min-h-0 flex-1 overflow-y-auto')}

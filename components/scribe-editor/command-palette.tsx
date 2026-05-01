@@ -33,6 +33,7 @@ import {
   Quote,
   RotateCw,
   Save,
+  Search,
   Settings,
   Sparkles,
   SplitSquareHorizontal,
@@ -74,6 +75,7 @@ export type CommandPaletteActions = {
   onSaveMarkdownAs: () => void;
   onExportPdf: () => void;
   onOpenLink: () => void;
+  onOpenFind: () => void;
   onOpenSettings: () => void;
   onToggleTheme: () => void;
   onOpenShortcuts?: () => void;
@@ -113,6 +115,7 @@ export function CommandPalette({
   onSaveMarkdownAs,
   onExportPdf,
   onOpenLink,
+  onOpenFind,
   onOpenSettings,
   onToggleTheme,
   onOpenShortcuts,
@@ -450,6 +453,19 @@ export function CommandPalette({
       },
 
       {
+        id: 'edit.find',
+        group: 'Edit',
+        label: 'Find in document…',
+        icon: <Search />,
+        shortcut: `${mod}F`,
+        keywords: ['search', 'find', 'replace'],
+        run: () => {
+          dismiss();
+          onOpenFind();
+        },
+      },
+
+      {
         id: 'view.toggle-toolbar',
         group: 'View',
         label: isFormattingToolbarOpen ? 'Hide formatting toolbar' : 'Show formatting toolbar',
@@ -606,6 +622,7 @@ export function CommandPalette({
     onNewDocument,
     onOpenFile,
     onOpenLink,
+    onOpenFind,
     onOpenSettings,
     onOpenShortcuts,
     onSaveDocument,

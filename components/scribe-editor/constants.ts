@@ -23,6 +23,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { common, createLowlight } from 'lowlight';
 
 import { Callout } from './callout-extension';
+import { SearchExtension } from './search-extension';
 import { SlashMenu } from './slash-menu-extension';
 import { buildSlashSuggestion } from './slash-menu-renderer';
 
@@ -98,6 +99,7 @@ export const EDITOR_EXTENSIONS = [
   TaskItem.configure({ nested: true }),
   CodeBlockLowlight.configure({ lowlight, defaultLanguage: 'plaintext' }),
   Callout,
+  SearchExtension,
   SlashMenu.configure({ suggestion: buildSlashSuggestion() }),
 ];
 

@@ -43,6 +43,7 @@ export function ShortcutsSheet({ open, onOpenChange, mod }: ShortcutsSheetProps)
     () => [
       section('Essentials', [
         { label: 'Open command palette', keys: [mod, 'K'] },
+        { label: 'Find in document', keys: [mod, 'F'] },
         { label: 'Insert block (slash menu)', keys: ['/'] },
         { label: 'Save', keys: [mod, 'S'] },
         { label: 'Save as…', keys: [mod, '⇧', 'S'] },

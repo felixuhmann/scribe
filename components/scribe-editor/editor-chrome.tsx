@@ -54,6 +54,7 @@ export function ScribeEditorChrome() {
     toggleFormattingToolbar,
     isCommandPaletteOpen,
     setCommandPaletteOpen,
+    setSearchBarOpen,
     canvas,
     autocompleteEnabled,
     requestToggleAutocomplete,
@@ -358,6 +359,19 @@ export function ScribeEditorChrome() {
         canvas.toggleFocusMode();
         return;
       }
+      if (key === 'f' && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        setSearchBarOpen(true);
+        // If the bar is already open, refocus and select its input.
+        window.setTimeout(() => {
+          const input = document.querySelector<HTMLInputElement>(
+            '[data-scribe-find-input]',
+          );
+          input?.focus();
+          input?.select();
+        }, 0);
+        return;
+      }
       if (e.key === ',') {
         e.preventDefault();
         setSettingsOpen(true);
@@ -392,7 +406,7 @@ export function ScribeEditorChrome() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [canvas, editor, flushAutosave, saveAsHtml, saveDocument, setCommandPaletteOpen]);
+  }, [canvas, editor, flushAutosave, saveAsHtml, saveDocument, setCommandPaletteOpen, setSearchBarOpen]);
 
   return (
     <>
@@ -446,6 +460,7 @@ export function ScribeEditorChrome() {
         onSaveMarkdownAs={() => void saveAsMarkdown()}
         onExportPdf={() => void exportPdf()}
         onOpenLink={() => setLinkOpen(true)}
+        onOpenFind={() => setSearchBarOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenShortcuts={() => setShortcutsOpen(true)}
         onToggleTheme={toggleThemeClass}
