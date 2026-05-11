@@ -40,6 +40,7 @@ import {
   Strikethrough,
   Sun,
   Table as TableIcon,
+  TableProperties,
   Type,
   Underline as UnderlineIcon,
   ZoomIn,
@@ -75,6 +76,7 @@ export type CommandPaletteActions = {
   onSaveMarkdownAs: () => void;
   onExportPdf: () => void;
   onOpenLink: () => void;
+  onOpenInsertTable: () => void;
   onOpenFind: () => void;
   onOpenSettings: () => void;
   onToggleTheme: () => void;
@@ -115,6 +117,7 @@ export function CommandPalette({
   onSaveMarkdownAs,
   onExportPdf,
   onOpenLink,
+  onOpenInsertTable,
   onOpenFind,
   onOpenSettings,
   onToggleTheme,
@@ -302,11 +305,103 @@ export function CommandPalette({
       {
         id: 'insert.table',
         group: 'Insert',
-        label: 'Table',
+        label: 'Table…',
+        icon: <TableProperties />,
+        keywords: ['table', 'grid', 'spreadsheet', 'rows', 'columns'],
+        run: () => {
+          dismiss();
+          onOpenInsertTable();
+        },
+      },
+      {
+        id: 'insert.table-quick',
+        group: 'Insert',
+        label: 'Quick table (3 × 3)',
         icon: <TableIcon />,
+        keywords: ['table', 'grid', '3x3'],
         run: () => {
           dismiss();
           editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+        },
+      },
+      {
+        id: 'edit.distribute-cols',
+        group: 'Table',
+        label: 'Distribute columns evenly',
+        icon: <TableProperties />,
+        keywords: ['table', 'columns', 'reset', 'width'],
+        disabled: !editor.isActive('table'),
+        run: () => {
+          dismiss();
+          editor.chain().focus().distributeTableColumns().run();
+        },
+      },
+      {
+        id: 'edit.sort-asc',
+        group: 'Table',
+        label: 'Sort by column (A → Z)',
+        icon: <TableProperties />,
+        keywords: ['table', 'sort', 'ascending'],
+        disabled: !editor.isActive('table'),
+        run: () => {
+          dismiss();
+          editor.chain().focus().sortTableByColumn('asc').run();
+        },
+      },
+      {
+        id: 'edit.sort-desc',
+        group: 'Table',
+        label: 'Sort by column (Z → A)',
+        icon: <TableProperties />,
+        keywords: ['table', 'sort', 'descending'],
+        disabled: !editor.isActive('table'),
+        run: () => {
+          dismiss();
+          editor.chain().focus().sortTableByColumn('desc').run();
+        },
+      },
+      {
+        id: 'edit.toggle-header-row',
+        group: 'Table',
+        label: 'Toggle header row',
+        icon: <TableProperties />,
+        disabled: !editor.isActive('table'),
+        run: () => {
+          dismiss();
+          editor.chain().focus().toggleHeaderRow().run();
+        },
+      },
+      {
+        id: 'edit.toggle-header-col',
+        group: 'Table',
+        label: 'Toggle header column',
+        icon: <TableProperties />,
+        disabled: !editor.isActive('table'),
+        run: () => {
+          dismiss();
+          editor.chain().focus().toggleHeaderColumn().run();
+        },
+      },
+      {
+        id: 'edit.merge-cells',
+        group: 'Table',
+        label: 'Merge or split cells',
+        icon: <TableProperties />,
+        disabled: !editor.isActive('table'),
+        run: () => {
+          dismiss();
+          editor.chain().focus().mergeOrSplit().run();
+        },
+      },
+      {
+        id: 'edit.delete-table',
+        group: 'Table',
+        label: 'Delete table',
+        icon: <TableProperties />,
+        disabled: !editor.isActive('table'),
+        run: () => {
+          dismiss();
+          editor.chain().focus().deleteTable().run();
         },
       },
       {
@@ -622,6 +717,7 @@ export function CommandPalette({
     onNewDocument,
     onOpenFile,
     onOpenLink,
+    onOpenInsertTable,
     onOpenFind,
     onOpenSettings,
     onOpenShortcuts,

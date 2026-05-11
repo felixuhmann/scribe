@@ -13,12 +13,14 @@ import {
   Minus,
   Quote,
   Table as TableIcon,
+  TableProperties,
   Type,
 } from 'lucide-react';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import { cn } from '@/lib/utils';
+import { OPEN_INSERT_TABLE_DIALOG_EVENT } from './scribe-editor-events';
 
 export type SlashCommandRunArgs = { editor: Editor; range: Range };
 
@@ -120,9 +122,20 @@ const ITEMS: SlashCommand[] = [
   },
   {
     id: 'table',
-    label: 'Table',
+    label: 'Table…',
+    hint: 'Pick rows and columns',
+    keywords: ['table', 'grid', 'spreadsheet'],
+    icon: <TableProperties className="size-4" />,
+    run: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).run();
+      window.dispatchEvent(new CustomEvent(OPEN_INSERT_TABLE_DIALOG_EVENT));
+    },
+  },
+  {
+    id: 'table-quick',
+    label: 'Quick table',
     hint: '3 × 3 with header',
-    keywords: ['table', 'grid'],
+    keywords: ['table', 'grid', '3x3', 'tbl'],
     icon: <TableIcon className="size-4" />,
     run: ({ editor, range }) =>
       editor

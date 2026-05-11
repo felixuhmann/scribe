@@ -13,8 +13,10 @@ import {
 } from '@/lib/markdown/markdown-io';
 import { CommandPalette } from './command-palette';
 import { EditorTopBar } from './editor-top-bar';
+import { InsertTableDialog } from './insert-table-dialog';
 import { LinkDialog } from './link-dialog';
 import { OnboardingCoachmarks } from './onboarding-coachmarks';
+import { OPEN_INSERT_TABLE_DIALOG_EVENT } from './scribe-editor-events';
 import { SettingsDialog } from './settings-dialog';
 import { ShortcutsSheet } from './shortcuts-sheet';
 import { useAutosave } from './use-autosave';
@@ -49,6 +51,7 @@ export function ScribeEditorChrome() {
   const {
     notifySettingsSaved,
     registerOpenLinkDialogHandler,
+    registerOpenInsertTableDialogHandler,
     registerOpenDocumentFromDiskHandler,
     isFormattingToolbarOpen,
     toggleFormattingToolbar,
@@ -77,6 +80,7 @@ export function ScribeEditorChrome() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [insertTableOpen, setInsertTableOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
@@ -295,6 +299,16 @@ export function ScribeEditorChrome() {
   }, [registerOpenLinkDialogHandler]);
 
   useEffect(() => {
+    return registerOpenInsertTableDialogHandler(() => setInsertTableOpen(true));
+  }, [registerOpenInsertTableDialogHandler]);
+
+  useEffect(() => {
+    const handler = () => setInsertTableOpen(true);
+    window.addEventListener(OPEN_INSERT_TABLE_DIALOG_EVENT, handler);
+    return () => window.removeEventListener(OPEN_INSERT_TABLE_DIALOG_EVENT, handler);
+  }, []);
+
+  useEffect(() => {
     return registerOpenDocumentFromDiskHandler(async (absolutePath: string) => {
       if (!editor) return;
       const api = window.scribe?.openDocumentAtPath;
@@ -422,6 +436,13 @@ export function ScribeEditorChrome() {
       {editor ? (
         <LinkDialog editor={editor} open={linkOpen} onOpenChange={setLinkOpen} />
       ) : null}
+      {editor ? (
+        <InsertTableDialog
+          editor={editor}
+          open={insertTableOpen}
+          onOpenChange={setInsertTableOpen}
+        />
+      ) : null}
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} onSaved={notifySettingsSaved} />
       <ShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} mod={mod} />
       <OnboardingCoachmarks mod={mod} />
@@ -460,6 +481,7 @@ export function ScribeEditorChrome() {
         onSaveMarkdownAs={() => void saveAsMarkdown()}
         onExportPdf={() => void exportPdf()}
         onOpenLink={() => setLinkOpen(true)}
+        onOpenInsertTable={() => setInsertTableOpen(true)}
         onOpenFind={() => setSearchBarOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenShortcuts={() => setShortcutsOpen(true)}

@@ -64,6 +64,12 @@ export function useEditorTabAutocomplete(editor: Editor, options: EditorTabAutoc
         editor.commands.setTabAutocompleteGhost(null, null);
         return;
       }
+      // Inside tables, Tab is a navigation key (next cell). Suppress ghost suggestions
+      // so users never have to fight autocomplete to traverse a row.
+      if (editor.isActive('table')) {
+        editor.commands.setTabAutocompleteGhost(null, null);
+        return;
+      }
       const anchorPos = editor.state.selection.from;
       debounceRef.current = setTimeout(() => {
         debounceRef.current = null;

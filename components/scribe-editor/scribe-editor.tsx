@@ -15,6 +15,7 @@ import { EditorSearchBar } from './editor-search-bar';
 import { LinkHoverCard } from './link-hover-card';
 import { useEditorChromeState } from './use-editor-chrome-state';
 import { EditorSelectionMenus } from './editor-selection-menus';
+import { TableContextMenu } from './table-context-menu';
 import { useEditorTabAutocomplete } from './use-editor-tab-autocomplete';
 import { useTypewriterScroll } from './use-typewriter-scroll';
 
@@ -165,6 +166,7 @@ function ScribeEditorInner({ editor }: { editor: Editor }) {
           </div>
           <ScribeEditorFooter autocompleteEnabled={tabAutocomplete.enabled} />
           <EditorSelectionMenus editor={editor} />
+          <TableContextMenu editor={editor} />
           <LinkHoverCard editor={editor} />
         </div>
       </Tiptap>

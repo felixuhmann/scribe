@@ -24,6 +24,9 @@ type EditorSessionValue = {
   /** Open the insert-link dialog (handled in app chrome). */
   requestOpenLinkDialog: () => void;
   registerOpenLinkDialogHandler: (handler: () => void) => () => void;
+  /** Open the insert-table dialog (grid picker, handled in app chrome). */
+  requestOpenInsertTableDialog: () => void;
+  registerOpenInsertTableDialogHandler: (handler: () => void) => () => void;
   /**
    * Load a document from an absolute path (Electron). Implemented in editor chrome
    * so the same parsing and editor updates apply as for File → Open.
@@ -62,6 +65,7 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
   const [editor, setEditorState] = useState<Editor | null>(null);
   const settingsSavedHandlerRef = useRef<(() => void) | null>(null);
   const openLinkDialogHandlerRef = useRef<(() => void) | null>(null);
+  const openInsertTableDialogHandlerRef = useRef<(() => void) | null>(null);
   const openDocumentFromDiskHandlerRef = useRef<
     ((absolutePath: string) => void | Promise<void>) | null
   >(null);
@@ -101,6 +105,19 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
 
   const requestOpenLinkDialog = useCallback(() => {
     openLinkDialogHandlerRef.current?.();
+  }, []);
+
+  const registerOpenInsertTableDialogHandler = useCallback((handler: () => void) => {
+    openInsertTableDialogHandlerRef.current = handler;
+    return () => {
+      if (openInsertTableDialogHandlerRef.current === handler) {
+        openInsertTableDialogHandlerRef.current = null;
+      }
+    };
+  }, []);
+
+  const requestOpenInsertTableDialog = useCallback(() => {
+    openInsertTableDialogHandlerRef.current?.();
   }, []);
 
   const registerOpenDocumentFromDiskHandler = useCallback(
@@ -154,6 +171,8 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
       registerSettingsSavedHandler,
       requestOpenLinkDialog,
       registerOpenLinkDialogHandler,
+      requestOpenInsertTableDialog,
+      registerOpenInsertTableDialogHandler,
       requestOpenDocumentFromDisk,
       registerOpenDocumentFromDiskHandler,
       isFormattingToolbarOpen,
@@ -178,6 +197,8 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
       registerSettingsSavedHandler,
       requestOpenLinkDialog,
       registerOpenLinkDialogHandler,
+      requestOpenInsertTableDialog,
+      registerOpenInsertTableDialogHandler,
       requestOpenDocumentFromDisk,
       registerOpenDocumentFromDiskHandler,
       isFormattingToolbarOpen,

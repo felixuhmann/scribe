@@ -26,6 +26,8 @@ import { Callout } from './callout-extension';
 import { SearchExtension } from './search-extension';
 import { SlashMenu } from './slash-menu-extension';
 import { buildSlashSuggestion } from './slash-menu-renderer';
+import { TableKeymap } from './table-extension';
+import { TablePaste } from './table-paste-extension';
 
 const lowlight = createLowlight(common);
 
@@ -95,6 +97,8 @@ export const EDITOR_EXTENSIONS = [
   TableRow,
   TableHeader,
   TableCell,
+  TableKeymap,
+  TablePaste,
   TaskList.configure({ HTMLAttributes: { class: 'scribe-task-list' } }),
   TaskItem.configure({ nested: true }),
   CodeBlockLowlight.configure({ lowlight, defaultLanguage: 'plaintext' }),

@@ -60,6 +60,14 @@ export function ShortcutsSheet({ open, onOpenChange, mod }: ShortcutsSheetProps)
         { label: 'Numbered list', keys: [mod, '⇧', '7'] },
         { label: 'Quote', keys: [mod, '⇧', 'B'] },
       ]),
+      section('Tables', [
+        { label: 'Insert table…', keys: ['/', 't'] },
+        { label: 'Move to next cell', keys: ['Tab'] },
+        { label: 'Move to previous cell', keys: ['⇧', 'Tab'] },
+        { label: 'Add a row at the end', keys: ['Tab', '(in last cell)'] },
+        { label: 'Exit table to a new paragraph', keys: [mod, '↵'] },
+        { label: 'Delete table (when all cells selected)', keys: [mod, 'Backspace'] },
+      ]),
       section('Document view', [
         { label: 'Focus mode', keys: [mod, '⇧', 'F'] },
         { label: 'Zoom in', keys: [mod, '+'] },

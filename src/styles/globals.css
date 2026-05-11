@@ -505,6 +505,8 @@
   table-layout: fixed;
   overflow: hidden;
   font-size: 0.95em;
+  /* Subtle outer rounding; the wrapper hides the corner overflow. */
+  border-radius: var(--radius-sm);
 }
 
 .scribe-editor-content .ProseMirror table th,
@@ -516,14 +518,43 @@
   min-width: 4em;
 }
 
+/* Empty cells should still receive a visible caret target. */
+.scribe-editor-content .ProseMirror table th > *:only-child:empty::before,
+.scribe-editor-content .ProseMirror table td > *:only-child:empty::before {
+  content: '\200B';
+  color: transparent;
+}
+
 .scribe-editor-content .ProseMirror table th {
   background: var(--scribe-prose-surface);
   font-weight: 600;
   text-align: left;
 }
 
+/* Cell alignment (Tiptap stores `text-align` as inline style on th/td). */
+.scribe-editor-content .ProseMirror table th[style*='text-align: center'],
+.scribe-editor-content .ProseMirror table td[style*='text-align: center'] {
+  text-align: center;
+}
+.scribe-editor-content .ProseMirror table th[style*='text-align: right'],
+.scribe-editor-content .ProseMirror table td[style*='text-align: right'] {
+  text-align: right;
+}
+.scribe-editor-content .ProseMirror table th[style*='text-align: left'],
+.scribe-editor-content .ProseMirror table td[style*='text-align: left'] {
+  text-align: left;
+}
+
+/* When a header column is enabled the first cell of each row is a `<th>`. Style it
+ * subtly so users can perceive the structural change without a heavy chrome flip. */
+.scribe-editor-content .ProseMirror table tr > th:first-child:not(:only-child) {
+  background: color-mix(in oklch, var(--scribe-prose-surface) 70%, transparent);
+}
+
 .scribe-editor-content .ProseMirror table .selectedCell {
   background: color-mix(in oklch, var(--scribe-prose-accent) 12%, transparent);
+  /* Add a soft inner ring so multi-cell selections read as a contiguous region. */
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--scribe-prose-accent) 35%, transparent);
 }
 
 .scribe-editor-content .ProseMirror table .column-resize-handle {
@@ -535,15 +566,44 @@
   background: var(--scribe-prose-accent);
   pointer-events: none;
   opacity: 0;
+  transition: opacity 120ms ease;
 }
 
 .scribe-editor-content .ProseMirror table:hover .column-resize-handle {
   opacity: 0.4;
 }
 
+.scribe-editor-content .ProseMirror table .column-resize-handle:hover,
+.scribe-editor-content .ProseMirror.resize-cursor table .column-resize-handle {
+  opacity: 0.85;
+}
+
+.scribe-editor-content .ProseMirror.resize-cursor {
+  cursor: col-resize;
+}
+
 .scribe-editor-content .ProseMirror .tableWrapper {
   overflow-x: auto;
   margin: 0;
+  /* Give horizontal scroll a visible affordance without stealing the canvas paint. */
+  scrollbar-width: thin;
+}
+
+/* Soft hover state on rows so users can perceive row boundaries during editing. */
+.scribe-editor-content .ProseMirror table tr:hover td,
+.scribe-editor-content .ProseMirror table tr:hover th {
+  background: color-mix(in oklch, var(--scribe-prose-surface) 35%, transparent);
+}
+.scribe-editor-content .ProseMirror table tr:hover th {
+  background: color-mix(in oklch, var(--scribe-prose-surface) 95%, transparent);
+}
+
+/* Whole-table selection ring when `allowTableNodeSelection` picks the table node. */
+.scribe-editor-content .ProseMirror .tableWrapper.ProseMirror-selectednode,
+.scribe-editor-content .ProseMirror table.ProseMirror-selectednode {
+  outline: 2px solid var(--scribe-prose-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 /* ─────────────────────────── Task list ─────────────────────────── */

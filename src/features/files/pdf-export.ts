@@ -17,8 +17,15 @@ blockquote{border-left:3px solid #ccc;margin:1em 0;padding-left:1em;color:#444;}
 hr{border:none;border-top:1px solid #ddd;margin:1.5em 0;}
 a{color:#2563eb;}
 ul,ol{padding-left:1.5em;}
-table{border-collapse:collapse;width:100%;margin:1em 0;}
-th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;}
+table{border-collapse:collapse;width:100%;margin:1em 0;table-layout:fixed;page-break-inside:auto;}
+thead{display:table-header-group;}
+tr{page-break-inside:avoid;}
+th,td{border:1px solid #d0d4dc;padding:6px 8px;text-align:left;vertical-align:top;}
+th{background:#f4f4f5;font-weight:600;}
+th[style*="text-align: center"],td[style*="text-align: center"]{text-align:center;}
+th[style*="text-align: right"],td[style*="text-align: right"]{text-align:right;}
+th[style*="text-align: left"],td[style*="text-align: left"]{text-align:left;}
+table th:empty::before,table td:empty::before{content:"\\200B";color:transparent;}
 </style></head><body>${innerBodyHtml}</body></html>`;
 }
 
