@@ -21,7 +21,7 @@ import {
   SplitSquareHorizontal,
   Trash2,
 } from 'lucide-react';
-import { useCallback, useMemo, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, type ReactNode } from 'react';
 
 import {
   DropdownMenu,
@@ -81,6 +81,7 @@ function MenuSeparator() {
  * never need to leave the keyboard or hunt through nested menus.
  */
 export function TableContextMenu({ editor }: { editor: Editor }) {
+  const menuContainerRef = useRef<HTMLDivElement | null>(null);
   const state = useEditorState({
     editor,
     selector: (ctx) => {
@@ -150,6 +151,7 @@ export function TableContextMenu({ editor }: { editor: Editor }) {
 
   return (
     <BubbleMenu
+      ref={menuContainerRef}
       editor={editor}
       pluginKey="scribeTableBubbleMenu"
       shouldShow={shouldShow}
@@ -159,7 +161,7 @@ export function TableContextMenu({ editor }: { editor: Editor }) {
     >
       {inTable ? (
         <>
-          <DropdownMenu>
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
@@ -172,7 +174,15 @@ export function TableContextMenu({ editor }: { editor: Editor }) {
                 <span className="max-md:hidden">Rows</span>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
+            <DropdownMenuContent
+              align="start"
+              className="w-56"
+              portalContainer={menuContainerRef.current}
+              onCloseAutoFocus={(e) => {
+                e.preventDefault();
+                editor.view.focus();
+              }}
+            >
               <DropdownMenuLabel>Rows</DropdownMenuLabel>
               <DropdownMenuItem onSelect={() => editor.chain().focus().addRowBefore().run()}>
                 <ArrowUp /> Insert above
@@ -187,7 +197,7 @@ export function TableContextMenu({ editor }: { editor: Editor }) {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <DropdownMenu>
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
@@ -200,7 +210,15 @@ export function TableContextMenu({ editor }: { editor: Editor }) {
                 <span className="max-md:hidden">Columns</span>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
+            <DropdownMenuContent
+              align="start"
+              className="w-56"
+              portalContainer={menuContainerRef.current}
+              onCloseAutoFocus={(e) => {
+                e.preventDefault();
+                editor.view.focus();
+              }}
+            >
               <DropdownMenuLabel>Columns</DropdownMenuLabel>
               <DropdownMenuItem onSelect={() => editor.chain().focus().addColumnBefore().run()}>
                 <ArrowUp className="rotate-[-90deg]" /> Insert left
@@ -261,7 +279,7 @@ export function TableContextMenu({ editor }: { editor: Editor }) {
 
           <MenuSeparator />
 
-          <DropdownMenu>
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
@@ -274,7 +292,15 @@ export function TableContextMenu({ editor }: { editor: Editor }) {
                 <Heading className="size-4" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent
+              align="end"
+              className="w-56"
+              portalContainer={menuContainerRef.current}
+              onCloseAutoFocus={(e) => {
+                e.preventDefault();
+                editor.view.focus();
+              }}
+            >
               <DropdownMenuLabel>Headers</DropdownMenuLabel>
               <DropdownMenuItem onSelect={() => editor.chain().focus().toggleHeaderRow().run()}>
                 <PanelTop /> Toggle header row

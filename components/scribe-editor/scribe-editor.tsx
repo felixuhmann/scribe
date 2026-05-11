@@ -133,6 +133,44 @@ function ScribeEditorInner({ editor }: { editor: Editor }) {
   const canvasRef = useRef<HTMLDivElement>(null);
   useTypewriterScroll(editor, canvasRef, canvas.typewriterMode);
 
+  useEffect(() => {
+    const canvasEl = canvasRef.current;
+    if (!canvasEl) return;
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.button !== 0 || !editor.isEditable) return;
+
+      const target = e.target as HTMLElement | null;
+      if (!target || !canvasEl.contains(target)) return;
+      if (
+        target.closest(
+          'button, a, input, textarea, select, [role="dialog"], .scribe-block-handle',
+        )
+      ) {
+        return;
+      }
+
+      const prose = canvasEl.querySelector('.ProseMirror');
+      if (!prose || !(prose instanceof HTMLElement)) return;
+
+      const proseRect = prose.getBoundingClientRect();
+      const { clientX: x, clientY: y } = e;
+
+      const inWritingBand = x >= proseRect.left - 16 && x <= proseRect.right + 16;
+      if (!inWritingBand) return;
+
+      /* Clicks on the scroll container’s own padding (below the prose column) should still
+       move the caret to the end — native hit-testing never reaches ProseMirror there. */
+      if (y > proseRect.bottom + 1) {
+        e.preventDefault();
+        editor.chain().focus('end').run();
+      }
+    };
+
+    canvasEl.addEventListener('pointerdown', onPointerDown, true);
+    return () => canvasEl.removeEventListener('pointerdown', onPointerDown, true);
+  }, [editor]);
+
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
       <Tiptap editor={editor}>

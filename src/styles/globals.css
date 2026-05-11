@@ -206,9 +206,17 @@
   font-feature-settings: 'kern', 'liga', 'onum';
 }
 
+/* Soft footer for the prose column so the end of the editable region reads as a boundary. */
+.scribe-editor-content {
+  border-bottom: 1px solid color-mix(in oklch, var(--border) 45%, transparent);
+}
+
 .scribe-editor-content .ProseMirror {
   outline: none;
   min-height: 40vh;
+  /* Extra hit area below the last block so clicks in “empty” space still land in the doc,
+     and canvas padding below the column still feels reachable after scrolling to the end. */
+  padding-bottom: min(42vh, 26rem);
   caret-color: var(--scribe-prose-accent);
 }
 

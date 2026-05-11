@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   inferContentFormatFromDocumentKey,
   useDocumentWorkspace,
 } from '@/components/document-workspace-context';
@@ -47,6 +57,11 @@ function syncStoredTheme() {
   }
 }
 
+type MarkdownFidelityConfirmation = {
+  warnings: string[];
+  resolve: (confirmed: boolean) => void;
+} | null;
+
 export function ScribeEditorChrome() {
   const {
     notifySettingsSaved,
@@ -83,13 +98,34 @@ export function ScribeEditorChrome() {
   const [insertTableOpen, setInsertTableOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [markdownFidelityConfirmation, setMarkdownFidelityConfirmation] =
+    useState<MarkdownFidelityConfirmation>(null);
 
   const openFilePicker = () => fileInputRef.current?.click();
 
-  const confirmMarkdownExportIfNeeded = useCallback((html: string): boolean => {
+  const refocusEditorSoon = useCallback(() => {
+    window.setTimeout(() => {
+      if (!editor?.isDestroyed) editor?.view.focus();
+    }, 0);
+  }, [editor]);
+
+  const resolveMarkdownFidelityConfirmation = useCallback(
+    (confirmed: boolean) => {
+      setMarkdownFidelityConfirmation((current) => {
+        current?.resolve(confirmed);
+        return null;
+      });
+      if (!confirmed) refocusEditorSoon();
+    },
+    [refocusEditorSoon],
+  );
+
+  const confirmMarkdownExportIfNeeded = useCallback((html: string): Promise<boolean> => {
     const warnings = getMarkdownFidelityWarnings(html);
-    if (warnings.length === 0) return true;
-    return window.confirm(formatMarkdownFidelityPrompt(warnings));
+    if (warnings.length === 0) return Promise.resolve(true);
+    return new Promise<boolean>((resolve) => {
+      setMarkdownFidelityConfirmation({ warnings, resolve });
+    });
   }, []);
 
   const openDocument = useCallback(async () => {
@@ -155,7 +191,7 @@ export function ScribeEditorChrome() {
   const saveAsMarkdown = useCallback(async () => {
     if (!editor) return;
     const htmlBody = editor.getHTML();
-    if (!confirmMarkdownExportIfNeeded(htmlBody)) return;
+    if (!(await confirmMarkdownExportIfNeeded(htmlBody))) return;
     const markdown = editorHtmlToMarkdown(htmlBody);
     const api = window.scribe?.saveMarkdownAs;
     if (api) {
@@ -195,7 +231,7 @@ export function ScribeEditorChrome() {
 
     if (diskAbsolutePath) {
       if (fmt === 'markdown') {
-        if (!confirmMarkdownExportIfNeeded(htmlBody)) return;
+        if (!(await confirmMarkdownExportIfNeeded(htmlBody))) return;
         const markdown = editorHtmlToMarkdown(htmlBody);
         if (toMdPath) {
           const result = await toMdPath(diskAbsolutePath, markdown);
@@ -215,7 +251,7 @@ export function ScribeEditorChrome() {
     }
 
     if (fmt === 'markdown') {
-      if (!confirmMarkdownExportIfNeeded(htmlBody)) return;
+      if (!(await confirmMarkdownExportIfNeeded(htmlBody))) return;
       const markdown = editorHtmlToMarkdown(htmlBody);
       if (asMdDialog) {
         const result = await asMdDialog({
@@ -446,6 +482,31 @@ export function ScribeEditorChrome() {
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} onSaved={notifySettingsSaved} />
       <ShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} mod={mod} />
       <OnboardingCoachmarks mod={mod} />
+      <AlertDialog
+        open={markdownFidelityConfirmation !== null}
+        onOpenChange={(open) => {
+          if (!open) resolveMarkdownFidelityConfirmation(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Markdown may simplify this document</AlertDialogTitle>
+            <AlertDialogDescription>
+              {markdownFidelityConfirmation
+                ? formatMarkdownFidelityPrompt(markdownFidelityConfirmation.warnings)
+                : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button" onClick={() => resolveMarkdownFidelityConfirmation(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction type="button" onClick={() => resolveMarkdownFidelityConfirmation(true)}>
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <EditorTopBar
         editor={editor}

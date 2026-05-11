@@ -7,6 +7,32 @@ import type { OpenDocumentResult } from '@/src/scribe-ipc-types';
 marked.setOptions({ gfm: true, breaks: false });
 
 /**
+ * CommonMark/GFM treats one or many blank lines purely as block separators, so
+ * `paragraph\n\n\nparagraph` parses the same as `paragraph\n\nparagraph`.
+ * Preserve intentional extra blank lines by converting every blank separator
+ * beyond the first into a raw HTML empty paragraph before handing off to marked.
+ */
+function preserveExtraBlankLines(src: string): string {
+  return src.replace(/\n{3,}/g, (match) => {
+    const emptyParagraphs = Math.max(1, match.length - 2);
+    return `\n\n${Array.from({ length: emptyParagraphs }, () => '<p><br></p>').join('\n\n')}\n\n`;
+  });
+}
+
+function isEmptyParagraph(node: Node): boolean {
+  if (node.nodeName !== 'P') return false;
+  const el = node as HTMLElement;
+  const text = (el.textContent ?? '').replace(/\u00a0/g, '').trim();
+  if (text) return false;
+  return Array.from(el.childNodes).every((child) => {
+    if (child.nodeType === Node.TEXT_NODE) {
+      return (child.textContent ?? '').replace(/\u00a0/g, '').trim() === '';
+    }
+    return child.nodeName === 'BR';
+  });
+}
+
+/**
  * Rehydrate GitHub admonitions (`> [!INFO]`) back into our `<div data-type="callout">` blocks.
  * Runs once on module init; marked uses the walker hooks to transform matching blockquotes.
  */
@@ -82,6 +108,14 @@ function getTurndown(): TurndownService {
     });
     td.use(gfm);
 
+    // Markdown cannot represent an empty paragraph node with plain blank lines:
+    // parsers collapse them into separators. Keep a raw HTML paragraph instead,
+    // which marked passes back through and Tiptap can parse as an empty block.
+    td.addRule('scribeEmptyParagraph', {
+      filter: (node) => isEmptyParagraph(node),
+      replacement: () => '\n\n<p><br></p>\n\n',
+    });
+
     // Preserve custom scribe blocks as raw HTML so Tiptap's parseHTML can rehydrate them on load.
     td.addRule('scribeCallout', {
       filter: (node) =>
@@ -131,7 +165,7 @@ function getTurndown(): TurndownService {
 
 /** Markdown source → HTML fragment for Tiptap `setContent`. */
 export function markdownToEditorHtml(src: string): string {
-  const out = marked.parse(src, { async: false });
+  const out = marked.parse(preserveExtraBlankLines(src), { async: false });
   if (typeof out !== 'string') {
     throw new Error('Markdown parsing did not return a string');
   }
