@@ -3,6 +3,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -13,6 +14,19 @@ import {
   useEditorCanvasPreferences,
   type CanvasPreferencesApi,
 } from '@/components/scribe-editor/use-editor-canvas-preferences';
+
+const FORMATTING_TOOLBAR_STORAGE_KEY = 'scribe.formattingToolbarOpen';
+
+function readStoredFormattingToolbarOpen(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const raw = localStorage.getItem(FORMATTING_TOOLBAR_STORAGE_KEY);
+    if (raw === null) return false;
+    return JSON.parse(raw) === true;
+  } catch {
+    return false;
+  }
+}
 
 type EditorSessionValue = {
   editor: Editor | null;
@@ -70,8 +84,22 @@ export function EditorSessionProvider({ children }: { children: ReactNode }) {
     ((absolutePath: string) => void | Promise<void>) | null
   >(null);
 
-  const [isFormattingToolbarOpen, setFormattingToolbarOpen] = useState(false);
+  const [isFormattingToolbarOpen, setFormattingToolbarOpen] = useState<boolean>(
+    readStoredFormattingToolbarOpen,
+  );
   const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(
+        FORMATTING_TOOLBAR_STORAGE_KEY,
+        JSON.stringify(isFormattingToolbarOpen),
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [isFormattingToolbarOpen]);
   const [isSearchBarOpen, setSearchBarOpen] = useState(false);
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(true);
   const toggleAutocompleteHandlerRef = useRef<(() => void | Promise<void>) | null>(null);

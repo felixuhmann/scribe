@@ -20,7 +20,10 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useState, type Rea
 import { createPortal } from 'react-dom';
 
 import { cn } from '@/lib/utils';
-import { OPEN_INSERT_TABLE_DIALOG_EVENT } from './scribe-editor-events';
+import {
+  OPEN_INSERT_IMAGE_DIALOG_EVENT,
+  OPEN_INSERT_TABLE_DIALOG_EVENT,
+} from './scribe-editor-events';
 
 export type SlashCommandRunArgs = { editor: Editor; range: Range };
 
@@ -148,13 +151,12 @@ const ITEMS: SlashCommand[] = [
   {
     id: 'image',
     label: 'Image',
-    hint: 'Insert from URL',
-    keywords: ['image', 'picture', 'photo', 'img'],
+    hint: 'Embed a file or paste a URL',
+    keywords: ['image', 'picture', 'photo', 'img', 'upload', 'embed'],
     icon: <ImageIcon className="size-4" />,
     run: ({ editor, range }) => {
-      const url = window.prompt('Image URL');
-      if (!url || !url.trim()) return;
-      editor.chain().focus().deleteRange(range).setImage({ src: url.trim() }).run();
+      editor.chain().focus().deleteRange(range).run();
+      window.dispatchEvent(new CustomEvent(OPEN_INSERT_IMAGE_DIALOG_EVENT));
     },
   },
   {

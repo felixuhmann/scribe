@@ -23,6 +23,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { common, createLowlight } from 'lowlight';
 
 import { Callout } from './callout-extension';
+import { ImageEmbed } from './image-embed-extension';
 import { SearchExtension } from './search-extension';
 import { SlashMenu } from './slash-menu-extension';
 import { buildSlashSuggestion } from './slash-menu-renderer';
@@ -89,6 +90,7 @@ export const EDITOR_EXTENSIONS = [
     allowBase64: true,
     HTMLAttributes: { class: 'scribe-editor-image' },
   }),
+  ImageEmbed,
   Table.configure({
     resizable: true,
     lastColumnResizable: true,

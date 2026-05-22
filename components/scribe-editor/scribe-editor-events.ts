@@ -6,3 +6,4 @@
  * cannot collide with us.
  */
 export const OPEN_INSERT_TABLE_DIALOG_EVENT = 'scribe:open-insert-table-dialog';
+export const OPEN_INSERT_IMAGE_DIALOG_EVENT = 'scribe:open-insert-image-dialog';

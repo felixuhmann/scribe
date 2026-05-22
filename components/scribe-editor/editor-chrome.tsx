@@ -23,10 +23,14 @@ import {
 } from '@/lib/markdown/markdown-io';
 import { CommandPalette } from './command-palette';
 import { EditorTopBar } from './editor-top-bar';
+import { InsertImageDialog } from './insert-image-dialog';
 import { InsertTableDialog } from './insert-table-dialog';
 import { LinkDialog } from './link-dialog';
 import { OnboardingCoachmarks } from './onboarding-coachmarks';
-import { OPEN_INSERT_TABLE_DIALOG_EVENT } from './scribe-editor-events';
+import {
+  OPEN_INSERT_IMAGE_DIALOG_EVENT,
+  OPEN_INSERT_TABLE_DIALOG_EVENT,
+} from './scribe-editor-events';
 import { SettingsDialog } from './settings-dialog';
 import { ShortcutsSheet } from './shortcuts-sheet';
 import { useAutosave } from './use-autosave';
@@ -96,6 +100,7 @@ export function ScribeEditorChrome() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [insertTableOpen, setInsertTableOpen] = useState(false);
+  const [insertImageOpen, setInsertImageOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [markdownFidelityConfirmation, setMarkdownFidelityConfirmation] =
@@ -345,6 +350,12 @@ export function ScribeEditorChrome() {
   }, []);
 
   useEffect(() => {
+    const handler = () => setInsertImageOpen(true);
+    window.addEventListener(OPEN_INSERT_IMAGE_DIALOG_EVENT, handler);
+    return () => window.removeEventListener(OPEN_INSERT_IMAGE_DIALOG_EVENT, handler);
+  }, []);
+
+  useEffect(() => {
     return registerOpenDocumentFromDiskHandler(async (absolutePath: string) => {
       if (!editor) return;
       const api = window.scribe?.openDocumentAtPath;
@@ -477,6 +488,13 @@ export function ScribeEditorChrome() {
           editor={editor}
           open={insertTableOpen}
           onOpenChange={setInsertTableOpen}
+        />
+      ) : null}
+      {editor ? (
+        <InsertImageDialog
+          editor={editor}
+          open={insertImageOpen}
+          onOpenChange={setInsertImageOpen}
         />
       ) : null}
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} onSaved={notifySettingsSaved} />
