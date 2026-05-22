@@ -260,7 +260,7 @@ export function InsertImageDialog({ editor, open, onOpenChange }: InsertImageDia
                 }}
               />
               <p className="text-muted-foreground text-xs">
-                The image stays at this URL — it isn't embedded in the document.
+                The image stays at this URL — it is not embedded in the document.
               </p>
             </div>
             <div className="flex flex-col gap-1.5">
