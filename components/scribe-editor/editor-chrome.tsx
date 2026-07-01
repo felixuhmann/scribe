@@ -142,7 +142,7 @@ export function ScribeEditorChrome() {
       notifyOpenedFromDisk(result.path);
       editor
         .chain()
-        .focus()
+        .focus(undefined, { scrollIntoView: false })
         .setContent(openDocumentResultToEditorHtml(result), { emitUpdate: true })
         .run();
       return;
@@ -158,7 +158,7 @@ export function ScribeEditorChrome() {
       notifyOpenedLocalFile(file);
       editor
         .chain()
-        .focus()
+        .focus(undefined, { scrollIntoView: false })
         .setContent(localFileToEditorHtml(file.name, text), { emitUpdate: true })
         .run();
     });
@@ -365,7 +365,7 @@ export function ScribeEditorChrome() {
       notifyOpenedFromDisk(result.path);
       editor
         .chain()
-        .focus()
+        .focus(undefined, { scrollIntoView: false })
         .setContent(openDocumentResultToEditorHtml(result), { emitUpdate: true })
         .run();
     });

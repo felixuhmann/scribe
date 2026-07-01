@@ -16,6 +16,7 @@ import { LinkHoverCard } from './link-hover-card';
 import { useEditorChromeState } from './use-editor-chrome-state';
 import { EditorSelectionMenus } from './editor-selection-menus';
 import { TableContextMenu } from './table-context-menu';
+import { useDocumentScrollMemory } from './use-document-scroll-memory';
 import { useEditorTabAutocomplete } from './use-editor-tab-autocomplete';
 import { useTypewriterScroll } from './use-typewriter-scroll';
 
@@ -121,7 +122,11 @@ function ScribeEditorInner({ editor }: { editor: Editor }) {
   useLayoutEffect(() => {
     const html = getBootstrapEditorHtml(documentKey);
     if (!html) return;
-    editor.chain().focus().setContent(html, { emitUpdate: false }).run();
+    editor
+      .chain()
+      .focus(undefined, { scrollIntoView: false })
+      .setContent(html, { emitUpdate: false })
+      .run();
     syncDocumentBaseline(editor.getHTML());
   }, [documentKey, editor, getBootstrapEditorHtml, syncDocumentBaseline]);
 
@@ -132,6 +137,7 @@ function ScribeEditorInner({ editor }: { editor: Editor }) {
 
   const canvasRef = useRef<HTMLDivElement>(null);
   useTypewriterScroll(editor, canvasRef, canvas.typewriterMode);
+  useDocumentScrollMemory(canvasRef, documentKey);
 
   useEffect(() => {
     const canvasEl = canvasRef.current;
